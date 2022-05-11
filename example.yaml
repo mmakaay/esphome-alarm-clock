@@ -1,0 +1,711 @@
+# TODO:
+# - mp3 audio
+# - fallback local audio
+
+substitutions:
+  name: "alarm-clock"
+  friendly_name: "Alarm Clock"
+
+esphome:
+  name: ${name}
+  on_boot:
+    then:
+      - script.execute: restore_time_from_rtc_module
+      - script.execute: start_blink_loop
+      - globals.set:
+          id: initialized
+          value: "true"
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# More quickly save alarm settings to flash. There's no reason
+# to wait the default minute on this type of device.
+preferences:
+  flash_write_interval: 2s
+
+logger:
+  level: DEBUG
+  logs:
+    sensor: INFO
+    apds9960: INFO
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  manual_ip:
+    static_ip: !secret net_alarm_clock_ip
+    gateway: !secret net_gateway
+    subnet: !secret net_mask
+    dns1: !secret net_dns
+    dns2: 9.9.9.9
+
+ota:
+  password: !secret alarm_clock_ota_password
+
+api:
+  password: !secret api_password
+  # Don't reboot the device when no API client is connected. This makes it
+  # feasible to use the device independent from Home Assistant.
+  reboot_timeout: 0s
+
+web_server:
+
+# I have two devices that require I2C communication. These get their own
+# dedicated I2C bus, so different frequencies can be used.
+i2c:
+  - id: rtc_module_bus
+    sda: GPIO16
+    scl: GPIO17
+    frequency: 200kHz
+
+  - id: gesture_sensor_bus
+    sda: GPIO21
+    scl: GPIO22
+    frequency: 50kHz
+
+globals:
+  # Whether or not initialization has completed.
+  - id: initialized
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  
+  # Whether or not the alarm is active.
+  - id: alarm_active
+    type: bool
+    restore_value: true
+    initial_value: "false"
+
+  # The time at which the alarm settings were modified.
+  - id: alarm_set_at
+    type: time_t
+    restore_value: true
+
+  # The time at which the alarm must trigger.
+  - id: alarm_hh
+    type: int
+    restore_value: true
+  - id: alarm_mm
+    type: int
+    restore_value: true
+
+  # The last time at which the alarm was triggered.
+  - id: alarm_triggered_at
+    type: time_t
+    restore_value: true
+
+  # Today's time at which to trigger the alarm.
+  - id: alarm_today_at
+    type: time_t
+    restore_value: false
+
+  # The time until which to snooze.
+  - id: snooze_until
+    type: time_t
+    restore_value: false
+
+  # Helper variable for controlling blinking of display elements.
+  - id: blink
+    type: bool
+    restore_value: false
+
+  # Whether or not the rotary button was rotated while pressed.
+  # When true, then releasing the rotary button will not change
+  # the active display page.
+  - id: rotated_during_press
+    type: bool
+    restore_value: false
+
+  # Whether or not the proximity sensor detected proximity at the
+  # start of the alarm. When proximity is detected at the start,
+  # then hovering the hand over the alarm clock is not accepted
+  # for snoozing, since something might be blocking the sensor.
+  - id: proximity_off_at_start_alarm
+    type: bool
+    restore_value: false
+
+script:
+  - id: restore_time_from_rtc_module
+    then:
+      - ds1307.read_time:
+
+  # (Re)starts the blink loop with blink enabled.
+  - id: start_blink_loop
+    mode: restart
+    then:
+      - lambda: "id(blink) = true;"
+      - script.execute: blink_loop
+
+  # Toggles the blink variable and updates the displays twice per second.
+  - id: blink_loop
+    mode: restart
+    then:
+      while:
+        condition:
+          lambda: "return true;"
+        then:
+          - script.execute: update_displays
+          - delay: 500ms
+          - lambda: "id(blink) = !id(blink);"
+
+  # Sends the UI to the main page when the user idles in a menu.             
+  - id: start_menu_timeout
+    mode: restart
+    then:
+      - delay: 4s
+      - lambda: 'id(page).make_call().set_option("main").perform();'
+      - script.execute: update_displays
+
+  # Update the last time at which the alarm was configured.
+  - id: register_alarm_set_at
+    mode: restart
+    then:
+      - globals.set:
+          id: alarm_set_at
+          value: !lambda 'return id(rtc_time).now().timestamp;'
+
+  # Called every minute to check if the alarm should be triggered.
+  - id: check_alarm
+    mode: restart
+    then:
+      lambda: |-
+        #include <ctime>
+        static uint8_t log_state = 0;
+        
+        if (!id(initialized)) {
+           ESP_LOGD("alarm_clock", "Initializing, do not yet check the alarm");
+           return;
+        }
+
+        // Check if the alarm is active.
+        if (!id(alarm_active)) { return; }
+
+        // Check if the alarm clock knows what time it is.
+        auto now = id(rtc_time).now();
+        if (!now.is_valid()) { return; }
+
+        // Get the current timestamp.
+        tm now_tm = now.to_c_tm();
+        time_t now_time = mktime(&now_tm);
+
+        // Compute today's timestamp for the configured alarm time.
+        tm alarm_tm = now.to_c_tm();
+        alarm_tm.tm_hour = (int)id(alarm_hh);
+        alarm_tm.tm_min = (int)id(alarm_mm);
+        alarm_tm.tm_sec = 0;
+        time_t alarm_today_at_time = mktime(&alarm_tm);
+        id(alarm_today_at) = mktime(&alarm_tm);
+
+        // If today's alarm time has not yet passed, then wait some more.
+        if (difftime(id(alarm_today_at), now_time) > 0) {
+          if (log_state != 1) {
+            ESP_LOGD("alarm_clock", "Alarm time not yet passed, wait some more");
+            ESP_LOGD("alarm_clock", "  alarm time: %s", ctime((time_t*)&id(alarm_today_at)));
+            ESP_LOGD("alarm_clock", "  now: %s", ctime((time_t*)&now_time));
+            log_state = 1;
+          }
+          return;
+        }
+
+        // If the alarm was set at a time later than today's alarm
+        // timestamp, then wait till tomorrow.
+        if (difftime(id(alarm_today_at), id(alarm_set_at)) < 0) {
+          if (log_state != 2) {
+            ESP_LOGD("alarm_clock", "Alarm was set after today's alarm time, wait till tomorrow");
+            ESP_LOGD("alarm_clock", "  alarm time: %s", ctime((time_t*)&id(alarm_today_at)));
+            ESP_LOGD("alarm_clock", "  alarm set at: %s", ctime((time_t*)&id(alarm_set_at)));
+            log_state = 2;
+          }
+          return;
+        }
+
+        // If the alarm already triggered at or after today's alarm
+        // timestamp, then wait for the next alarm time.
+        if (difftime(id(alarm_today_at), id(alarm_triggered_at)) <= 0) {
+          if (log_state != 3) {
+            ESP_LOGD("alarm_clock", "Alarm already triggered, wait till tomorrow");
+            ESP_LOGD("alarm_clock", "  alarm time: %s", ctime((time_t*)&id(alarm_today_at)));
+            ESP_LOGD("alarm_clock", "  triggered at: %s", ctime((time_t*)&id(alarm_triggered_at)));
+            log_state = 3;
+          }
+          return;
+        }
+
+        // All constraints met, trigger the alarm!
+        id(do_alarm).execute();
+
+  # Turn on the alarm. 
+  - id: do_alarm
+    then:
+      - lambda: |-
+          ESP_LOGI("Alarm Clock", "Start alarm sequence");
+      - script.stop: do_snooze
+      - globals.set:
+          id: proximity_off_at_start_alarm
+          value: !lambda "return !id(proximity_detected).state;"
+      - globals.set:
+          id: alarm_triggered_at
+          value: !lambda |-
+            tm now_tm = id(rtc_time).now().to_c_tm();
+            time_t now_time = mktime(&now_tm);
+            return now_time;
+      - delay: !lambda "return id(max_alarm_time_in_minutes).state * 60.0 * 1000.0;"
+      - script.execute: turn_off_alarm
+
+  # Turn on snooze mode.
+  - id: do_snooze
+    then:
+      - lambda: |-
+          ESP_LOGI("Alarm Clock", "Start snooze sequence");
+      - script.stop: do_alarm
+      - lambda: |-
+          auto now = id(rtc_time).now();
+          tm snooze_until_tm = now.to_c_tm();
+          snooze_until_tm.tm_sec += id(snooze_time_in_minutes).state * 60.0;
+          id(snooze_until) = mktime(&snooze_until_tm);
+          ESP_LOGD("alarm_clock", "  snooze until: %s", ctime((time_t*)&id(snooze_until)));
+      - delay: !lambda "return id(snooze_time_in_minutes).state * 60.0 * 1000.0;"
+      - script.execute: do_alarm
+
+  # Turn off the alarm
+  - id: turn_off_alarm
+    then:
+      - script.stop: do_snooze
+      - script.stop: do_alarm
+
+  # Presents the alarm clock's UI on the connected displays.
+  - id: update_displays
+    mode: restart
+    then:
+      - lambda: |-
+          if (!id(initialized)) {
+            return;
+          }
+
+          auto dt = id(time_display);
+          auto da = id(alarm_display);
+          auto p = id(page).state;
+          auto b = id(blink);
+          auto hh = (int)id(alarm_hh);
+          auto mm = (int)id(alarm_mm);
+
+          if (p == "main") {
+            if (id(rtc_time).now().is_valid()) {
+              dt->strftime(b ? "%H.%M" : "%H%M", id(rtc_time).now());
+            } else {
+              dt->print("SYNC");
+            }
+            if (id(do_alarm).is_running()) {
+              da->print("BEEP");
+            } else if (id(do_snooze).is_running()) {
+              tm now_tm = id(rtc_time).now().to_c_tm();
+              time_t now_time = mktime(&now_tm);
+              auto diff = (int)(difftime(id(snooze_until), now_time));
+              da->printf(b ? "-%02d-" : " %02d ", (diff+59) / 60);
+            } else if (id(alarm_active)) {
+              da->printf("%02d.%02d", hh, mm); 
+            } else {
+              da->print("    ");
+            }
+          } else if (p == "alarm_hh") {
+            dt->print("SET ");
+            if (b) {
+              da->printf("%02d.%02d", hh, mm);
+            } else {
+              da->printf("  .%02d", mm);
+            }
+          } else if (p == "alarm_mm") {
+            dt->print("SET ");
+            if (b) {
+              da->printf("%02d.%02d", hh, mm);
+            } else {
+              da->printf("%02d.  ", hh);
+            }
+          } else if (p == "alarm_active") {
+            dt->print("ACT ");
+            da->print(id(alarm_active) ? "on  " : "off ");
+          } else if (p == "radio_channel") {
+            dt->print("CHAN");
+            da->print(id(radio_channel).state.c_str());
+          } else if (p == "display_intensity") {
+            dt->print("DISP");
+            da->printf("   %d", (int)id(display_intensity).state + 1);
+          }
+          dt->display();
+          da->display();
+
+time:
+  # The RTC time is the main time source.
+  - platform: ds1307
+    id: rtc_time
+    i2c_id: rtc_module_bus
+    timezone: Europe/Amsterdam
+    update_interval: 1h
+    on_time:
+      seconds: 0
+      minutes: "*"
+      then:
+        script.execute: check_alarm
+
+  # NTP for syncing the RTC module's time.
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Amsterdam
+    on_time_sync:
+      then:
+        - ds1307.write_time:
+        - logger.log:
+            level: WARN
+            format: "Wrote NTP time to local RTC"
+
+select:
+  # Pages that are used in the alarm clock's UI.
+  - platform: template
+    id: page
+    internal: true
+    optimistic: true
+    restore_value: false
+    options:
+      - main
+      - alarm_hh
+      - alarm_mm
+      - alarm_active
+      - radio_channel
+      - display_intensity
+
+  # Radio stations
+  # NPO1 : https://icecast.omroep.nl/radio1-sb-mp3
+  # NPO2 : https://icecast.omroep.nl/radio2-sb-mp3
+  # NPO3 : https://icecast.omroep.nl/3fm-sb-mp3
+  # NPO4 : https://icecast.omroep.nl/radio4-sb-mp3
+  # NPO5 : https://icecast.omroep.nl/radio5-sb-mp3
+  # SOUL : https://icecast.omroep.nl/radio6-sb-mp3
+  # 538  : http://21223.live.streamtheworld.com/RADIO538.mp3
+  # BNR  : http://stream.bnr.nl/bnr_mp3_128_20
+  - platform: template
+    name: "${friendly_name} Radio station"
+    entity_category: ""
+    id: radio_channel
+    optimistic: true
+    restore_value: true
+    options:
+      - "NPO1"
+      - "NPO2"
+      - "NPO3"
+      - "NPO4"
+      - "NPO5"
+      - "SOUL"
+      - "538 "
+      - "BNR "
+    on_value:
+      then:
+        script.execute: update_displays
+       
+number:
+  - platform: template
+    id: max_alarm_time_in_minutes
+    name: "${friendly_name} Max Alarm Time in Minutes"
+    entity_category: ""
+    mode: box
+    initial_value: 5
+    min_value: 0.1
+    max_value: 60
+    step: 1
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: snooze_time_in_minutes
+    name: "${friendly_name} Snooze Time in Minutes"
+    entity_category: ""
+    mode: box
+    initial_value: 9
+    min_value: 0.1
+    max_value: 30
+    step: 1
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: alarm_hh_number
+    name: "${friendly_name} Alarm HH"
+    entity_category: ""
+    mode: box
+    min_value: 0
+    max_value: 23
+    step: 1
+    lambda: "return id(alarm_hh);"
+    set_action:
+        - lambda: |-
+            id(alarm_hh) = x;
+            id(alarm_hh_number).update();
+        - script.execute: register_alarm_set_at
+    on_value:
+      then:
+        - script.execute: update_displays
+    
+  - platform: template
+    id: alarm_mm_number
+    name: "${friendly_name} Alarm MM"
+    entity_category: ""
+    mode: box
+    min_value: 0
+    max_value: 59
+    step: 5
+    lambda: "return id(alarm_mm);"
+    set_action:
+        - lambda: |-
+            id(alarm_mm) = x;
+            id(alarm_mm_number).update();
+        - script.execute: register_alarm_set_at
+    on_value:
+      then:
+        - script.execute: update_displays
+
+  - platform: template
+    id: display_intensity
+    name: "${friendly_name} Display Intensity"
+    initial_value: 3
+    min_value: 0
+    max_value: 3
+    step: 1
+    optimistic: true
+    restore_value: true
+    on_value:
+      then:
+        - lambda: |-
+            id(alarm_display).set_intensity(x);
+            id(time_display).set_intensity(x);
+        - script.execute: update_displays
+
+switch:
+  # A switch component that provides the UI for turning
+  # on and off the alarm.
+  - platform: template
+    id: alarm_active_switch
+    entity_category: ""
+    name: ${friendly_name} Alarm Active
+    lambda: "return id(alarm_active);"
+    turn_on_action:
+      - globals.set: { id: alarm_active, value: "true" }
+      - script.execute: register_alarm_set_at
+    turn_off_action:
+      - globals.set: { id: alarm_active, value: "false" }
+      - script.execute: register_alarm_set_at
+    on_turn_on:
+      then:
+        - script.execute: update_displays 
+    on_turn_off:
+      then:
+        - script.execute: update_displays 
+
+display:
+  # The display that is used for displaying the current time.
+  - platform: tm1637
+    id: time_display
+    dio_pin: GPIO13
+    clk_pin: GPIO14
+    intensity: 3
+    update_interval: 1h
+
+  # The display that is used for displaying the alarm time.
+  - platform: tm1637
+    id: alarm_display
+    dio_pin: GPIO4
+    clk_pin: GPIO5
+    intensity: 3
+    update_interval: 1h
+
+#external_components:
+#  - source:
+#      type: local
+#      path: src/esphome-vs1053/components
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+#vs1053:
+#  cs_pin: GPIO32
+#  dcs_pin: GPIO33
+#  dreq_pin: GPIO15
+ 
+apds9960:
+  update_interval: 500ms
+  i2c_id: gesture_sensor_bus
+
+sensor:
+  - platform: uptime
+    name: ${friendly_name} Uptime
+
+  - platform: apds9960
+    id: proximity_sensor
+    name: ${friendly_name} Proximity
+    type: PROXIMITY
+
+  # This sensor represents the rotary function of the rotary encoder.
+  - platform: rotary_encoder
+    id: rotary_encoder_pos
+    entity_category: diagnostic
+    name: "${friendly_name} Rotary Encoder"
+    pin_a:
+      number: GPIO26
+      mode: INPUT_PULLUP
+    pin_b:
+      number: GPIO27
+      mode: INPUT_PULLUP
+    resolution: 1
+    on_clockwise:
+      then:
+        - if:
+            condition:
+              binary_sensor.is_on: rotary_encoder_key
+            then:
+              - select.next: page
+              - globals.set:
+                  id: rotated_during_press
+                  value: "true"
+            else:
+              - if:
+                  condition:
+                    lambda: 'return id(page).state == "alarm_hh";'
+                  then:
+                    - number.increment: { id: alarm_hh_number, cycle: true }
+              - if:
+                  condition:
+                    lambda: 'return id(page).state == "alarm_mm";'
+                  then:
+                    - number.increment: { id: alarm_mm_number, cycle: true }
+              - if:
+                  condition:
+                    lambda: 'return id(page).state == "alarm_active";'
+                  then:
+                    - switch.turn_on: alarm_active_switch
+              - if:
+                  condition:
+                    lambda: 'return id(page).state == "radio_channel";'
+                  then:
+                    select.next:
+                      id: radio_channel
+                      cycle: false
+              - if:
+                  condition:
+                    lambda: 'return id(page).state == "display_intensity";'
+                  then:
+                    number.increment:
+                      id: display_intensity 
+                      cycle: false
+        - script.execute: start_blink_loop
+        - script.execute: start_menu_timeout
+    on_anticlockwise:
+      then:
+        - if:
+            condition:
+              binary_sensor.is_on: rotary_encoder_key
+            then:
+              - select.previous: page
+              - globals.set:
+                  id: rotated_during_press
+                  value: "true"
+            else:
+              - if:
+                  condition:
+                    lambda: 'return id(page).state == "alarm_hh";'
+                  then:
+                    - number.decrement: { id: alarm_hh_number, cycle: true }
+              - if:
+                  condition:
+                    lambda: 'return id(page).state == "alarm_mm";'
+                  then:
+                    - number.decrement: { id: alarm_mm_number, cycle: true }
+              - if:
+                  condition:
+                    lambda: 'return id(page).state == "alarm_active";'
+                  then:
+                    switch.turn_off:
+                      id: alarm_active_switch
+              - if:
+                  condition:
+                    lambda: 'return id(page).state == "radio_channel";'
+                  then:
+                    select.previous:
+                      id: radio_channel
+                      cycle: false
+              - if:
+                  condition:
+                    lambda: 'return id(page).state == "display_intensity";'
+                  then:
+                    number.decrement:
+                      id: display_intensity 
+                      cycle: false
+        - script.execute: start_blink_loop
+        - script.execute: start_menu_timeout
+
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi Signal"
+    update_interval: 30s
+
+binary_sensor:
+  - platform: status
+    name: "${friendly_name} Status"
+
+  # This binary sensor represents the key function of the rotary encoder.
+  - platform: gpio
+    id: rotary_encoder_key
+    entity_category: diagnostic
+    name: "${friendly_name} Rotary Encoder Button"
+    pin:
+      number: GPIO25
+      mode: INPUT_PULLUP
+      inverted: true
+    filters:
+      - delayed_on: 10ms
+    on_press:
+      then:
+        - globals.set:
+            id: rotated_during_press
+            value: "false"
+    on_release:
+      then: 
+        if:
+          condition:
+            lambda: |-
+              return id(do_alarm).is_running() ||
+                     id(do_snooze).is_running();
+          then:
+            - script.execute: turn_off_alarm
+          else:
+            if:
+              condition:
+                lambda: 'return !id(rotated_during_press);'
+              then:
+                - select.next: page
+                - script.execute: start_blink_loop
+                - script.execute: start_menu_timeout
+  
+  # Proximity detection, used to switch an alarm into snooze mode
+  # by hovering a hand over the alarm clock.
+  - platform: analog_threshold
+    id: proximity_detected
+    name: "${friendly_name} Proximity Detected"
+    sensor_id: proximity_sensor
+    threshold:
+      upper: 30
+      lower: 15
+    on_press:
+      if:
+        # The snooze feature will only work when no proximity was
+        # detected at the start of the alarm. This prevents activating
+        # snooze mode when something is blocking the proximity sensor.
+        condition:
+          lambda: |-
+            return id(proximity_off_at_start_alarm) &&
+                   id(do_alarm).is_running();
+        then:
+          - script.execute: do_snooze
+

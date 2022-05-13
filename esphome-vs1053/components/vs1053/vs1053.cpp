@@ -11,7 +11,6 @@ void VS1053Component::setup() {
   this->dreq_pin_->setup();
   this->xdcs_pin_->setup();
   this->xcs_pin_->setup();
-  this->spi_setup();
 }
 
 void VS1053Component::dump_config() {
@@ -47,6 +46,9 @@ void VS1053Component::loop() {
   }
   else if (this->state_ == VS1053_SETUP_1) {
     if (this->state_ms_passed_(500)) {
+      // The device starts in slow SPI mode.
+      this->fast_mode_ = false;
+
       // Some basic communication tests to see if SPI is working.
       if (!this->test_communication_()) {
         this->to_state_(VS1053_FAILED); 
@@ -72,15 +74,21 @@ void VS1053Component::loop() {
       // After this, we can safely use a SPI speed of 4MHz therefore.
       ESP_LOGD(TAG, "Configuring device to allow high speed SPI clock");
       this->write_register_(SCI_CLOCKF, 0x6000);
+      this->fast_mode_ = true;
 
       this->to_state_(VS1053_SETUP_2); 
     }
   }
   else if (this->state_ == VS1053_SETUP_2) {
-    if (this->test_communication_()) {
-      this->to_state_(VS1053_READY); 
-      ESP_LOGI(TAG, "Device initialized and ready for use");
-    } else {
+    if (this->state_ms_passed_(100)) {
+      this->wait_for_data_request_();
+
+      // Some basic communication tests to see if SPI is working.
+      if (!this->test_communication_()) {
+        this->to_state_(VS1053_FAILED); 
+        ESP_LOGE(TAG, "Device initialized failed");
+      }
+
       this->to_state_(VS1053_FAILED); 
       ESP_LOGE(TAG, "Device initialized failed");
     }
@@ -105,7 +113,7 @@ bool VS1053Component::test_communication_() {
   }
   // Now test if we can write and read data over the
   // bus without errors.
-  auto step_size = this->fast_mode_ ? 3 : 300;
+  auto step_size = this->fast_mode_ ? 50 : 300;
   auto cycles = 0;
   for (int value = 0; value < 0xFFFF; value += step_size) {
     cycles++;
@@ -129,45 +137,69 @@ void VS1053Component::soft_reset_() {
   this->wait_for_data_request_();
 }
 
+void VS1053Component::write_byte_(uint8_t value) {
+  if (this->fast_mode_) {
+    this->fast_spi_->write_byte(value);
+  } else {
+    this->slow_spi_->write_byte(value);
+  }
+}
+
+void VS1053Component::write_byte16_(uint16_t value) {
+  if (this->fast_mode_) {
+    this->fast_spi_->write_byte16(value);
+  } else {
+    this->slow_spi_->write_byte16(value);
+  }
+}
+
+uint8_t VS1053Component::read_byte_() {
+  if (this->fast_mode_) {
+    return this->fast_spi_->read_byte();
+  } else {
+    return this->slow_spi_->read_byte();
+  }
+}
+
 void VS1053Component::write_register_(uint8_t reg, uint16_t value) {
   this->control_mode_on_();
-  this->write_byte(VS1053_WRITE_OP);
-  this->write_byte(reg);
-  this->write_byte16(value);
+  this->write_byte_(VS1053_WRITE_OP);
+  this->write_byte_(reg);
+  this->write_byte16_(value);
   this->control_mode_off_();
   ESP_LOGVV(TAG, "write_register: 0x%02X: 0x%02X", reg, value);
 }
 
 uint16_t VS1053Component::read_register_(uint8_t reg) {
   this->control_mode_on_();
-  this->write_byte(VS1053_READ_OP);
-  this->write_byte(reg);
-  uint16_t value = this->read_byte() << 8 | this->read_byte();
+  this->write_byte_(VS1053_READ_OP);
+  this->write_byte_(reg);
+  uint16_t value = this->read_byte_() << 8 | this->read_byte_();
   this->control_mode_off_();
   ESP_LOGVV(TAG, "read_register: 0x%02X: 0x%02X", reg, value);
   return value;
 }
 
 void VS1053Component::control_mode_on_() {
-  this->enable();
+  this->slow_spi_->enable();
   this->xdcs_pin_->digital_write(true);
   this->xcs_pin_->digital_write(false);
 }
 
 void VS1053Component::control_mode_off_() {
-  this->disable();
+  this->slow_spi_->disable();
   this->xdcs_pin_->digital_write(true);
   this->xcs_pin_->digital_write(true);
 }
 
 void VS1053Component::data_mode_on_() {
-  this->enable();
+  this->slow_spi_->enable();
   this->xcs_pin_->digital_write(true);
   this->xdcs_pin_->digital_write(false);
 }
 
 void VS1053Component::data_mode_off_() {
-  this->disable();
+  this->slow_spi_->disable();
   this->xdcs_pin_->digital_write(true);
   this->xcs_pin_->digital_write(true);
 }

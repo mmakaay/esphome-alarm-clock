@@ -55,25 +55,35 @@ enum SCI_ModeBits {
   SM_LINE_IN = 14,
 };
 
-class VS1053SlowSPI : public spi::SPIDevice<
+class VS1053SlowSPI : public Component,
+                      public spi::SPIDevice<
                             spi::BIT_ORDER_MSB_FIRST,
                             spi::CLOCK_POLARITY_LOW,
                             spi::CLOCK_PHASE_LEADING,
-                            spi::DATA_RATE_200KHZ> { };
+                            spi::DATA_RATE_200KHZ> {
+  void setup() override {
+    this->spi_setup();
+  }
+};
 
-class VS1053FastSPI : public spi::SPIDevice<
+class VS1053FastSPI : public Component,
+                      public spi::SPIDevice<
                             spi::BIT_ORDER_MSB_FIRST,
                             spi::CLOCK_POLARITY_LOW,
                             spi::CLOCK_PHASE_LEADING,
-                            spi::DATA_RATE_4MHZ> { };
+                            spi::DATA_RATE_4MHZ> {
+  void setup() override {
+    this->spi_setup();
+  }
+};
 
-class VS1053Component : public Component, public VS1053SlowSPI {
+class VS1053Component : public Component {
  public:
   void set_dreq_pin(GPIOPin *dreq_pin) { this->dreq_pin_ = dreq_pin; }
   void set_xdcs_pin(GPIOPin *xdcs_pin) { this->xdcs_pin_ = xdcs_pin; }
   void set_xcs_pin(GPIOPin *xcs_pin) { this->xcs_pin_ = xcs_pin; }
-  //void set_slow_spi(VS1053SlowSPI *spi) { this->slow_spi_ = spi; }
-  //void set_fast_spi(VS1053FastSPI *spi) { this->fast_spi_ = spi; }
+  void set_slow_spi(VS1053SlowSPI *spi) { this->slow_spi_ = spi; }
+  void set_fast_spi(VS1053FastSPI *spi) { this->fast_spi_ = spi; }
 
   void setup() override;
   void dump_config() override;
@@ -82,8 +92,8 @@ class VS1053Component : public Component, public VS1053SlowSPI {
  protected:
   State state_{VS1053_INIT};
   uint32_t state_timer_; 
-  //VS1053SlowSPI *slow_spi_;
-  //VS1053FastSPI *fast_spi_;
+  VS1053SlowSPI *slow_spi_;
+  VS1053FastSPI *fast_spi_;
   bool fast_mode_{false};
   GPIOPin *xcs_pin_;
   GPIOPin *xdcs_pin_;
@@ -98,6 +108,9 @@ class VS1053Component : public Component, public VS1053SlowSPI {
   void data_mode_off_();
   void write_register_(uint8_t reg, uint16_t value);
   uint16_t read_register_(uint8_t reg);
+  void write_byte_(uint8_t value);
+  void write_byte16_(uint16_t value);
+  uint8_t read_byte_();
   void wait_for_data_request_() const;
 };
 

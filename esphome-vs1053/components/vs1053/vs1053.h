@@ -22,19 +22,37 @@ const uint8_t VS1053_WRITE_OP = 2;
 const uint8_t VS1053_READ_OP = 3;
 
 enum SCI_Register {
-  SCI_MODE = 0x0,
-  SCI_STATUS = 0x1,
-  SCI_BASS = 0x2,
-  SCI_CLOCKF = 0x3,
-  SCI_DECODE_TIME = 0x4,
-  SCI_AUDATA = 0x5,
-  SCI_WRAM = 0x6,
-  SCI_WRAMADDR = 0x7,
-  SCI_AIADDR = 0xA,
-  SCI_VOL = 0xB,
-  SCI_AICTRL0 = 0xC,
-  SCI_AICTRL1 = 0xD,
-  SCI_NUM_REGISTERS = 0xF
+  SCI_MODE = 0,
+  SCI_STATUS = 1,
+  SCI_BASS = 2,
+  SCI_CLOCKF = 3,
+  SCI_DECODE_TIME = 4,
+  SCI_AUDATA = 5,
+  SCI_WRAM = 6,
+  SCI_WRAMADDR = 7,
+  SCI_AIADDR = 10,
+  SCI_VOL = 11,
+  SCI_AICTRL0 = 12,
+  SCI_AICTRL1 = 13,
+  SCI_NUM_REGISTERS = 15 
+};
+
+enum SCI_ModeBits {
+  SM_DIFF = 0,
+  SM_LAYER12 = 1,
+  SM_RESET = 2,
+  SM_OUTOFWAV = 3,
+  SM_EARSPEAKER_LO = 4,
+  SM_TESTS = 5,
+  SM_STREAM = 6,
+  SM_EARSPEAKER_HI = 7,
+  SM_DACT = 8,
+  SM_SDIORD = 9,
+  SM_SDISHARE = 10,
+  SM_SDINEW = 11,
+  SM_ADPCM = 12,
+  SM_ADCPM_HP = 13,
+  SM_LINE_IN = 14,
 };
 
 class VS1053SlowSPI : public spi::SPIDevice<
@@ -73,7 +91,7 @@ class VS1053Component : public Component, public VS1053SlowSPI {
   void to_state_(State state);
   bool state_ms_passed_(uint32_t nr_of_ms) const;
   bool test_communication_();
-  void reset_device_();
+  void soft_reset_();
   void control_mode_on_();
   void control_mode_off_();
   void data_mode_on_();

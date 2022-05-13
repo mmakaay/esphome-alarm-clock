@@ -24,14 +24,14 @@ void VS1053Component::dump_config() {
 
 void VS1053Component::loop() {
   if (this->state_ == VS1053_INIT) {
-    ESP_LOGCONFIG(TAG, "Initializing device");
+    ESP_LOGI(TAG, "Initializing device");
     this->xcs_pin_->digital_write(true);
     this->xdcs_pin_->digital_write(true);
     this->to_state_(VS1053_RESET_1);
   }
   else if (this->state_ == VS1053_RESET_1) {
     if (this->state_ms_passed_(100)) {
-      ESP_LOGCONFIG(TAG, "XCS/XDCS both to low to trigger reset");
+      ESP_LOGD(TAG, "XCS/XDCS both to low to trigger reset");
       this->xcs_pin_->digital_write(false);
       this->xdcs_pin_->digital_write(false);
       this->to_state_(VS1053_RESET_2);
@@ -39,7 +39,7 @@ void VS1053Component::loop() {
   }
   else if (this->state_ == VS1053_RESET_2) {
     if (this->state_ms_passed_(500)) {
-      ESP_LOGCONFIG(TAG, "XCS/XDCS both to high to finish reset");
+      ESP_LOGD(TAG, "XCS/XDCS both to high to finish reset");
       this->xcs_pin_->digital_write(true);
       this->xdcs_pin_->digital_write(true);
       this->to_state_(VS1053_SETUP_1);
@@ -47,20 +47,33 @@ void VS1053Component::loop() {
   }
   else if (this->state_ == VS1053_SETUP_1) {
     if (this->state_ms_passed_(500)) {
-      if (this->test_communication_()) {
-//        // Declick: disable analog.
-//        this->write_register_(SCI_VOL, 0xFFFF);
-//        this->write_register_(SCI_AUDATA, 10);
-//        delay(100);
-//        // Switch on analog parts.
-//        this->write_register_(SCI_VOL, 0xFEFE);
-//        this->write_register_(SCI_AUDATA, 44101); // 44.1kHz audio
-//        this->write_register_(SCI_VOL, 0x2020);
-        this->to_state_(VS1053_SETUP_2); 
-      } else {
+      // Some basic communication tests to see if SPI is working.
+      if (!this->test_communication_()) {
         this->to_state_(VS1053_FAILED); 
         ESP_LOGE(TAG, "Device initialized failed");
       }
+
+      // Soft reset and see if SCI_MODE is set to the expected default value.
+      this->soft_reset_();
+      ESP_LOGD(TAG, "Check default status of SCI_MODE");
+      auto mode = this->read_register_(SCI_MODE);
+      if (mode != (1<<SM_SDINEW)) {
+        ESP_LOGE(TAG, "SCI_MODE not SM_SDINEW after reset (value is %d)", mode);
+        ESP_LOGE(TAG, "Device initialized failed");
+        this->to_state_(VS1053_FAILED); 
+        return;
+      }
+
+      // Setup the device audio.
+      ESP_LOGD(TAG, "Turning on analog audio at 44.1kHz");
+      this->write_register_(SCI_AUDATA, 44101);
+
+      // Set the device clock multiplier to 3x, making speeds up to 5MHz possible.
+      // After this, we can safely use a SPI speed of 4MHz therefore.
+      ESP_LOGD(TAG, "Configuring device to allow high speed SPI clock");
+      this->write_register_(SCI_CLOCKF, 0x6000);
+
+      this->to_state_(VS1053_SETUP_2); 
     }
   }
   else if (this->state_ == VS1053_SETUP_2) {
@@ -86,14 +99,12 @@ bool VS1053Component::state_ms_passed_(uint32_t nr_of_ms) const {
 
 bool VS1053Component::test_communication_() {
   // The device must have pulled the DREQ pin high.
-  ESP_LOGCONFIG(TAG, "Checking DREQ status (should be HIGH)");
   if (this->dreq_pin_->digital_read() == false) {
     ESP_LOGE(TAG, "DREQ is not HIGH, device connected correctly?");
     return false;
   }
   // Now test if we can write and read data over the
   // bus without errors.
-  ESP_LOGCONFIG(TAG, "Testing SPI communication");
   auto step_size = this->fast_mode_ ? 3 : 300;
   auto cycles = 0;
   for (int value = 0; value < 0xFFFF; value += step_size) {
@@ -107,8 +118,15 @@ bool VS1053Component::test_communication_() {
       return false;
     }
   }
-  ESP_LOGCONFIG(TAG, "SPI communication successful during %d write/read cycles", cycles);
+  ESP_LOGD(TAG, "SPI communication successful during %d write/read cycles", cycles);
   return true;
+}
+
+void VS1053Component::soft_reset_() {
+  ESP_LOGD(TAG, "soft resetting the device");
+  this->write_register_(SCI_MODE, (1<<SM_SDINEW) | (1<<SM_RESET));
+  delay(5);
+  this->wait_for_data_request_();
 }
 
 void VS1053Component::write_register_(uint8_t reg, uint16_t value) {

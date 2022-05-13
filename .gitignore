@@ -2,3 +2,7 @@ secrets.yaml
 .esphome
 *.sw*
 *.pyc
+
+# Tmp for development (got some inspirational libraries checkout out locally).
+esphome-vs1053/ESP_VS1053_Library/
+esphome-vs1053/VS1003/

@@ -52,8 +52,6 @@ api:
   # feasible to use the device independent from Home Assistant.
   reboot_timeout: 0s
 
-web_server:
-
 # I have two devices that require I2C communication. These get their own
 # dedicated I2C bus, so different frequencies can be used.
 i2c:
@@ -68,7 +66,7 @@ i2c:
     frequency: 50kHz
 
 globals:
-  # Whether or not initialization has completed.
+  # Whether or not system initialization has completed.
   - id: initialized
     type: bool
     restore_value: false
@@ -177,7 +175,6 @@ script:
         static uint8_t log_state = 0;
         
         if (!id(initialized)) {
-           ESP_LOGD("alarm_clock", "Initializing, do not yet check the alarm");
            return;
         }
 
@@ -203,9 +200,9 @@ script:
         // If today's alarm time has not yet passed, then wait some more.
         if (difftime(id(alarm_today_at), now_time) > 0) {
           if (log_state != 1) {
-            ESP_LOGD("alarm_clock", "Alarm time not yet passed, wait some more");
-            ESP_LOGD("alarm_clock", "  alarm time: %s", ctime((time_t*)&id(alarm_today_at)));
-            ESP_LOGD("alarm_clock", "  now: %s", ctime((time_t*)&now_time));
+            ESP_LOGD("Alarm Clock", "Alarm time not yet passed, wait some more");
+            ESP_LOGD("Alarm Clock", "  alarm time: %s", ctime((time_t*)&id(alarm_today_at)));
+            ESP_LOGD("Alarm Clock", "  now: %s", ctime((time_t*)&now_time));
             log_state = 1;
           }
           return;
@@ -215,9 +212,9 @@ script:
         // timestamp, then wait till tomorrow.
         if (difftime(id(alarm_today_at), id(alarm_set_at)) < 0) {
           if (log_state != 2) {
-            ESP_LOGD("alarm_clock", "Alarm was set after today's alarm time, wait till tomorrow");
-            ESP_LOGD("alarm_clock", "  alarm time: %s", ctime((time_t*)&id(alarm_today_at)));
-            ESP_LOGD("alarm_clock", "  alarm set at: %s", ctime((time_t*)&id(alarm_set_at)));
+            ESP_LOGD("Alarm Clock", "Alarm was set after today's alarm time, wait till tomorrow");
+            ESP_LOGD("Alarm Clock", "  alarm time: %s", ctime((time_t*)&id(alarm_today_at)));
+            ESP_LOGD("Alarm Clock", "  alarm set at: %s", ctime((time_t*)&id(alarm_set_at)));
             log_state = 2;
           }
           return;
@@ -227,9 +224,9 @@ script:
         // timestamp, then wait for the next alarm time.
         if (difftime(id(alarm_today_at), id(alarm_triggered_at)) <= 0) {
           if (log_state != 3) {
-            ESP_LOGD("alarm_clock", "Alarm already triggered, wait till tomorrow");
-            ESP_LOGD("alarm_clock", "  alarm time: %s", ctime((time_t*)&id(alarm_today_at)));
-            ESP_LOGD("alarm_clock", "  triggered at: %s", ctime((time_t*)&id(alarm_triggered_at)));
+            ESP_LOGD("Alarm Clock", "Alarm already triggered, wait till tomorrow");
+            ESP_LOGD("Alarm Clock", "  alarm time: %s", ctime((time_t*)&id(alarm_today_at)));
+            ESP_LOGD("Alarm Clock", "  triggered at: %s", ctime((time_t*)&id(alarm_triggered_at)));
             log_state = 3;
           }
           return;
@@ -259,17 +256,21 @@ script:
   # Turn on snooze mode.
   - id: do_snooze
     then:
-      - lambda: |-
-          ESP_LOGI("Alarm Clock", "Start snooze sequence");
-      - script.stop: do_alarm
-      - lambda: |-
-          auto now = id(rtc_time).now();
-          tm snooze_until_tm = now.to_c_tm();
-          snooze_until_tm.tm_sec += id(snooze_time_in_minutes).state * 60.0;
-          id(snooze_until) = mktime(&snooze_until_tm);
-          ESP_LOGD("alarm_clock", "  snooze until: %s", ctime((time_t*)&id(snooze_until)));
-      - delay: !lambda "return id(snooze_time_in_minutes).state * 60.0 * 1000.0;"
-      - script.execute: do_alarm
+      if:
+        condition:
+          script.is_running: do_alarm
+        then:
+          - lambda: |-
+              ESP_LOGI("Alarm Clock", "Start snooze sequence");
+          - script.stop: do_alarm
+          - lambda: |-
+              auto now = id(rtc_time).now();
+              tm snooze_until_tm = now.to_c_tm();
+              snooze_until_tm.tm_sec += id(snooze_time_in_minutes).state * 60.0;
+              id(snooze_until) = mktime(&snooze_until_tm);
+              ESP_LOGD("Alarm Clock", "  snooze until: %s", ctime((time_t*)&id(snooze_until)));
+          - delay: !lambda "return id(snooze_time_in_minutes).state * 60.0 * 1000.0;"
+          - script.execute: do_alarm
 
   # Turn off the alarm
   - id: turn_off_alarm
@@ -503,6 +504,23 @@ switch:
       then:
         - script.execute: update_displays 
 
+button:
+  # A button to fully turn off the alarm.
+  - platform: template
+    id: turn_off_alarm_button
+    name: "${friendly_name} Alarm Off Button"
+    icon: "mdi:alarm-off"
+    on_press:
+      script.execute: turn_off_alarm
+
+  # A button to turn on snooze mode.
+  - platform: template
+    id: snooze_alarm_button
+    name: "${friendly_name} Snooze Button"
+    icon: "mdi:alarm-snooze"
+    on_press:
+      script.execute: do_snooze
+
 display:
   # The display that is used for displaying the current time.
   - platform: tm1637
@@ -520,20 +538,20 @@ display:
     intensity: 3
     update_interval: 1h
 
-#external_components:
-#  - source:
-#      type: local
-#      path: src/esphome-vs1053/components
+external_components:
+  - source:
+      type: local
+      path: esphome-vs1053/components
 
 spi:
   clk_pin: GPIO18
   mosi_pin: GPIO23
   miso_pin: GPIO19
 
-#vs1053:
-#  cs_pin: GPIO32
-#  dcs_pin: GPIO33
-#  dreq_pin: GPIO15
+vs1053:
+  xcs_pin: GPIO32
+  xdcs_pin: GPIO33
+  dreq_pin: GPIO15
  
 apds9960:
   update_interval: 500ms
@@ -674,9 +692,9 @@ binary_sensor:
       then: 
         if:
           condition:
-            lambda: |-
-              return id(do_alarm).is_running() ||
-                     id(do_snooze).is_running();
+            or:
+              - script.is_running: do_alarm
+              - script.is_running: do_snooze
           then:
             - script.execute: turn_off_alarm
           else:
@@ -698,14 +716,12 @@ binary_sensor:
       upper: 30
       lower: 15
     on_press:
+      # The snooze feature will only work when no proximity was
+      # detected at the start of the alarm. This prevents activating
+      # snooze mode when something is blocking the proximity sensor.
       if:
-        # The snooze feature will only work when no proximity was
-        # detected at the start of the alarm. This prevents activating
-        # snooze mode when something is blocking the proximity sensor.
         condition:
-          lambda: |-
-            return id(proximity_off_at_start_alarm) &&
-                   id(do_alarm).is_running();
+          lambda: 'return id(proximity_off_at_start_alarm);'
         then:
           - script.execute: do_snooze
 

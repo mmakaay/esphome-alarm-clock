@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vs1053_spi.h"
 #include "esphome/core/component.h"
 #include "esphome/components/spi/spi.h"
 
@@ -38,43 +39,21 @@ enum SCI_Register {
 };
 
 enum SCI_ModeBits {
-  SM_DIFF = 0,
-  SM_LAYER12 = 1,
-  SM_RESET = 2,
-  SM_OUTOFWAV = 3,
-  SM_EARSPEAKER_LO = 4,
-  SM_TESTS = 5,
-  SM_STREAM = 6,
-  SM_EARSPEAKER_HI = 7,
-  SM_DACT = 8,
-  SM_SDIORD = 9,
-  SM_SDISHARE = 10,
-  SM_SDINEW = 11,
-  SM_ADPCM = 12,
-  SM_ADCPM_HP = 13,
-  SM_LINE_IN = 14,
-};
-
-class VS1053SlowSPI : public Component,
-                      public spi::SPIDevice<
-                            spi::BIT_ORDER_MSB_FIRST,
-                            spi::CLOCK_POLARITY_LOW,
-                            spi::CLOCK_PHASE_LEADING,
-                            spi::DATA_RATE_200KHZ> {
-  void setup() override {
-    this->spi_setup();
-  }
-};
-
-class VS1053FastSPI : public Component,
-                      public spi::SPIDevice<
-                            spi::BIT_ORDER_MSB_FIRST,
-                            spi::CLOCK_POLARITY_LOW,
-                            spi::CLOCK_PHASE_LEADING,
-                            spi::DATA_RATE_4MHZ> {
-  void setup() override {
-    this->spi_setup();
-  }
+  SM_DIFF = 1<<0,
+  SM_LAYER12 = 1<<1,
+  SM_RESET = 1<<2,
+  SM_OUTOFWAV = 1<<3,
+  SM_EARSPEAKER_LO = 1<<4,
+  SM_TESTS = 1<<5,
+  SM_STREAM = 1<<6,
+  SM_EARSPEAKER_HI = 1<<7,
+  SM_DACT = 1<<8,
+  SM_SDIORD = 1<<9,
+  SM_SDISHARE = 1<<10,
+  SM_SDINEW = 1<<11,
+  SM_ADPCM = 1<<12,
+  SM_ADCPM_HP = 1<<13,
+  SM_LINE_IN = 1<<14,
 };
 
 class VS1053Component : public Component {
@@ -82,8 +61,7 @@ class VS1053Component : public Component {
   void set_dreq_pin(GPIOPin *dreq_pin) { this->dreq_pin_ = dreq_pin; }
   void set_xdcs_pin(GPIOPin *xdcs_pin) { this->xdcs_pin_ = xdcs_pin; }
   void set_xcs_pin(GPIOPin *xcs_pin) { this->xcs_pin_ = xcs_pin; }
-  void set_slow_spi(VS1053SlowSPI *spi) { this->slow_spi_ = spi; }
-  void set_fast_spi(VS1053FastSPI *spi) { this->fast_spi_ = spi; }
+  void set_spi(VS1053SPI *spi) { this->spi_ = spi; }
 
   void setup() override;
   void dump_config() override;
@@ -92,14 +70,14 @@ class VS1053Component : public Component {
  protected:
   State state_{VS1053_INIT};
   uint32_t state_timer_; 
-  VS1053SlowSPI *slow_spi_;
-  VS1053FastSPI *fast_spi_;
-  bool fast_mode_{false};
+  void to_state_(State state);
+  bool state_ms_passed_(uint32_t nr_of_ms) const;
+
+  VS1053SPI *spi_;
   GPIOPin *xcs_pin_;
   GPIOPin *xdcs_pin_;
   GPIOPin *dreq_pin_;
-  void to_state_(State state);
-  bool state_ms_passed_(uint32_t nr_of_ms) const;
+
   bool test_communication_();
   void soft_reset_();
   void control_mode_on_();
@@ -108,9 +86,7 @@ class VS1053Component : public Component {
   void data_mode_off_();
   void write_register_(uint8_t reg, uint16_t value);
   uint16_t read_register_(uint8_t reg);
-  void write_byte_(uint8_t value);
-  void write_byte16_(uint16_t value);
-  uint8_t read_byte_();
+  bool data_request_ready_() const;
   void wait_for_data_request_() const;
 };
 

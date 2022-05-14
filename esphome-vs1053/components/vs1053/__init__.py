@@ -3,12 +3,11 @@ import esphome.config_validation as cv
 from esphome import automation
 from esphome import pins
 from esphome.components import spi
-from esphome.const import (
-    CONF_ID,
-)
+from esphome.const import CONF_ID
 
 CONF_SPI_FAST_ID = "spi_fast_id"
 CONF_SPI_SLOW_ID = "spi_slow_id"
+CONF_SPI_WRAPPER_ID = "spi_wrapper_id"
 CONF_DREQ_PIN = "dreq_pin"
 CONF_XCS_PIN = "xcs_pin"
 CONF_XDCS_PIN = "xdcs_pin"
@@ -20,6 +19,7 @@ vs1053_ns = cg.esphome_ns.namespace("vs1053")
 VS1053Component = vs1053_ns.class_("VS1053Component", cg.Component)
 VS1053SlowSPI = vs1053_ns.class_("VS1053SlowSPI", cg.Component, spi.SPIDevice)
 VS1053FastSPI = vs1053_ns.class_("VS1053FastSPI", cg.Component, spi.SPIDevice)
+VS1053SPI = vs1053_ns.class_("VS1053SPI", cg.Component)
 
 CONFIG_SCHEMA = (
     cv.Schema(
@@ -27,6 +27,7 @@ CONFIG_SCHEMA = (
             cv.GenerateID(): cv.declare_id(VS1053Component),
             cv.GenerateID(CONF_SPI_SLOW_ID): cv.declare_id(VS1053SlowSPI),
             cv.GenerateID(CONF_SPI_FAST_ID): cv.declare_id(VS1053FastSPI),
+            cv.GenerateID(CONF_SPI_WRAPPER_ID): cv.declare_id(VS1053SPI),
             cv.Required(CONF_DREQ_PIN): pins.gpio_input_pin_schema,
             cv.Required(CONF_XDCS_PIN): pins.gpio_output_pin_schema,
             cv.Required(CONF_XCS_PIN): pins.gpio_output_pin_schema,
@@ -40,13 +41,17 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
+    spi_wrapper = cg.new_Pvariable(config[CONF_SPI_WRAPPER_ID])
+    await cg.register_component(spi_wrapper, config)
+    cg.add(var.set_spi(spi_wrapper))
+
     spi_slow = cg.new_Pvariable(config[CONF_SPI_SLOW_ID])
     await spi.register_spi_device(spi_slow, config)
-    cg.add(var.set_slow_spi(spi_slow))
+    cg.add(spi_wrapper.set_slow_spi(spi_slow))
 
     spi_fast = cg.new_Pvariable(config[CONF_SPI_FAST_ID])
     await spi.register_spi_device(spi_fast, config)
-    cg.add(var.set_fast_spi(spi_fast))
+    cg.add(spi_wrapper.set_fast_spi(spi_fast))
 
     dreq_pin = await cg.gpio_pin_expression(config[CONF_DREQ_PIN])
     cg.add(var.set_dreq_pin(dreq_pin))

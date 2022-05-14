@@ -13,6 +13,7 @@ enum State {
   VS1053_RESET_2,
   VS1053_SETUP_1,
   VS1053_SETUP_2,
+  VS1053_REPORT_FAILED,
   VS1053_FAILED,
   VS1053_READY
 };
@@ -56,6 +57,18 @@ enum SCI_ModeBits {
   SM_LINE_IN = 1<<14,
 };
 
+enum Chipset {
+  SS_VER_VS1001,
+  SS_VER_VS1011,
+  SS_VER_VS1002,
+  SS_VER_VS1003,
+  SS_VER_VS1053,
+  SS_VER_VS1033,
+  SS_VER_VS1103,
+  SS_VER_VS1063,
+  SS_VER_UNKNOWN
+};
+
 class VS1053Component : public Component {
  public:
   void set_dreq_pin(GPIOPin *dreq_pin) { this->dreq_pin_ = dreq_pin; }
@@ -78,6 +91,7 @@ class VS1053Component : public Component {
   GPIOPin *xdcs_pin_;
   GPIOPin *dreq_pin_;
 
+  Chipset get_chipset_();
   bool test_communication_();
   void soft_reset_();
   void control_mode_on_();

@@ -26,32 +26,28 @@ void VS1053Component::loop() {
     this->xcs_pin_->digital_write(true);
     this->xdcs_pin_->digital_write(true);
     this->to_state_(VS1053_RESET_1);
-  }
-  else if (this->state_ == VS1053_RESET_1) {
+  } else if (this->state_ == VS1053_RESET_1) {
     if (this->state_ms_passed_(100)) {
       ESP_LOGD(TAG, "XCS/XDCS both to low to trigger reset");
       this->xcs_pin_->digital_write(false);
       this->xdcs_pin_->digital_write(false);
       this->to_state_(VS1053_RESET_2);
     }
-  }
-  else if (this->state_ == VS1053_RESET_2) {
+  } else if (this->state_ == VS1053_RESET_2) {
     if (this->state_ms_passed_(500)) {
       ESP_LOGD(TAG, "XCS/XDCS both to high to finish reset");
       this->xcs_pin_->digital_write(true);
       this->xdcs_pin_->digital_write(true);
       this->to_state_(VS1053_SETUP_1);
     }
-  }
-  else if (this->state_ == VS1053_SETUP_1) {
+  } else if (this->state_ == VS1053_SETUP_1) {
     if (this->state_ms_passed_(500)) {
       // The device starts in slow SPI mode.
       this->spi_->go_slow();
 
       // Some basic communication tests to see if SPI is working.
       if (!this->test_communication_()) {
-        this->to_state_(VS1053_FAILED); 
-        ESP_LOGE(TAG, "Device initialized failed");
+        this->to_state_(VS1053_REPORT_FAILED); 
         return;
       }
 
@@ -61,8 +57,15 @@ void VS1053Component::loop() {
       auto mode = this->read_register_(SCI_MODE);
       if (mode != SM_SDINEW) {
         ESP_LOGE(TAG, "SCI_MODE not SM_SDINEW after reset (value is %d)", mode);
-        ESP_LOGE(TAG, "Device initialized failed");
-        this->to_state_(VS1053_FAILED); 
+        this->to_state_(VS1053_REPORT_FAILED); 
+        return;
+      }
+
+      // Check if the expected VS1053 chipset is in use.
+      auto chipset = this->get_chipset_();
+      if (chipset != SS_VER_VS1053) {
+        ESP_LOGE(TAG, "Chipset is not VS1053 (SS_VER: %d)", chipset);
+        this->to_state_(VS1053_REPORT_FAILED); 
         return;
       }
 
@@ -78,21 +81,23 @@ void VS1053Component::loop() {
 
       this->to_state_(VS1053_SETUP_2); 
     }
-  }
-  else if (this->state_ == VS1053_SETUP_2) {
+  } else if (this->state_ == VS1053_SETUP_2) {
     if (!this->data_request_ready_()) {
       return;
     }
 
-    // Some basic communication tests to see if SPI is working.
+    // Some basic communication tests to see if SPI is working in fast mode.
     if (!this->test_communication_()) {
-      this->to_state_(VS1053_FAILED); 
-      ESP_LOGE(TAG, "Device initialized failed");
+      this->to_state_(VS1053_REPORT_FAILED); 
       return;
     }
 
+    // All is okay, the device can be used.
     this->to_state_(VS1053_READY); 
     ESP_LOGI(TAG, "Device initialized successfully");
+  } else if (this->state_ == VS1053_REPORT_FAILED) {
+    ESP_LOGE(TAG, "Device initialized failed");
+    this->to_state_(VS1053_FAILED);
   }
 }
 
@@ -104,6 +109,26 @@ void VS1053Component::to_state_(State state) {
 bool VS1053Component::state_ms_passed_(uint32_t nr_of_ms) const {
   auto time_passed = millis() - this->state_timer_;
   return time_passed >= nr_of_ms;
+}
+
+// From the datasheet:
+// SCI_STATUS register has SS_VER in bits 4:7
+// SS_VER is 0 for VS1001, 1 for VS1011, 2 for VS1002, 3 for VS1003,
+// 4 for VS1053 and VS8053, 5 for VS1033, 7 for VS1103, and 6 for VS1063.
+Chipset VS1053Component::get_chipset_() {
+  auto status = this->read_register_(SCI_STATUS);
+  auto version = (status & 0xf0) >> 4;
+  switch (version) {
+    case 0: return SS_VER_VS1001;
+    case 1: return SS_VER_VS1011;
+    case 2: return SS_VER_VS1002;
+    case 3: return SS_VER_VS1003;
+    case 4: return SS_VER_VS1053;
+    case 5: return SS_VER_VS1033;
+    case 6: return SS_VER_VS1103;
+    case 7: return SS_VER_VS1063;
+    default: return SS_VER_UNKNOWN;
+  };
 }
 
 bool VS1053Component::test_communication_() {

@@ -82,6 +82,10 @@ class VS10XXBase : public Component {
   void dump_config() override;
   void loop() override;
 
+  /// Load patches or plugin code (in compressed plugin .plg format) into
+  /// the device. These can be found on the VLSI site: http://www.vlsi.fi
+  void load_user_code(const unsigned short *plugin, size_t size);
+
  protected:
   /// The tag to use for log messages.
   const char* log_tag_;
@@ -108,24 +112,24 @@ class VS10XXBase : public Component {
   /// Turning it off through the reset pin, offers the best power saving.
   GPIOPin *reset_pin_{nullptr};
 
-  /// Trigger a soft reset.
-  /// This will reset the software decoder of the device.
-  void soft_reset_();
-
   /// Trigger a hard reset.
   /// This will only work when a reset pin has been defined.
   /// A hard reset will reset all control registers and internal states
   /// of the device to their initial values. So after this, all software
   /// registers must be setup for decoding to work.
-  void hard_reset_();
+  void hard_reset_() const;
+
+  /// Trigger a soft reset.
+  /// This will reset the software decoder of the device.
+  void soft_reset_() const;
 
   /// Returns the version of the VS10XX chipset.
   /// The vs10xx_base::Chipset enum contains the known chipset versions
   /// that the resported version can be compared against.
-  uint8_t get_chipset_version_();
+  uint8_t get_chipset_version_() const;
 
   /// Perform tests on the SPI communication to see if the bus is working.
-  bool test_communication_();
+  bool test_communication_() const;
 
   /// Wait for the device to become ready for action. 
   /// Note that this call is blocking. It would be better to modify this
@@ -136,12 +140,12 @@ class VS10XXBase : public Component {
   bool data_request_ready_() const;
 
   // SPI interaction methods.
-  void control_mode_on_();
-  void control_mode_off_();
-  void data_mode_on_();
-  void data_mode_off_();
-  void write_register_(uint8_t reg, uint16_t value);
-  uint16_t read_register_(uint8_t reg);
+  void control_mode_on_() const;
+  void control_mode_off_() const;
+  void data_mode_on_() const;
+  void data_mode_off_() const;
+  void write_register_(uint8_t reg, uint16_t value) const;
+  uint16_t read_register_(uint8_t reg) const;
 
   // Some utility fields and methods to implement a simple state machine. 
   State state_{VS10XX_INIT};

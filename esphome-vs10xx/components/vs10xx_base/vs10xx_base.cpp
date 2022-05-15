@@ -53,6 +53,32 @@ void VS10XXBase::loop() {
   }
 }
 
+// Code based on example code provided by plugin manuals, e.g.
+// https://www.vlsi.fi/fileadmin/software/VS10XX/dacpatch.pdf
+// This code is able to translate the compressed plugin format
+// into SPI register writes.
+void VS10XXBase::load_user_code(const unsigned short *plugin, size_t size) {
+  int i = 0;
+  while (i < size) {
+    uint8_t addr = plugin[i++];
+    uint16_t n = plugin[i++];
+    // Replication mode: write multiple samples of the same value.
+    if (n & 0x8000U) {
+      n = n & 0x7FFF;
+      uint16_t value = plugin[i++];
+      while (n--) {
+        this->write_register_(addr, value);
+      }
+    // Copy mode: write multiple values.
+    } else {
+      while (n--) {
+        uint16_t value = plugin[i++];
+        this->write_register_(addr, value);
+      }
+    }
+  }
+}
+
 void VS10XXBase::state_init_() {
   ESP_LOGI(this->log_tag_, "Initializing device");
 
@@ -105,7 +131,7 @@ void VS10XXBase::state_setup_slow_spi_() {
   }
 
   // Set device clock multiplier to the recommended value for typical use.
-  // After this, we can safely use a SPI speed of 4MHz therefore.
+  // After this, we can safely use a SPI speed of 4MHz.
   //
   // Note:
   // For VS1003 and VS1053, I see 0x9800 in both data sheets. They mean different things
@@ -151,7 +177,7 @@ bool VS10XXBase::state_ms_passed_(uint32_t nr_of_ms) const {
   return time_passed >= nr_of_ms;
 }
 
-uint8_t VS10XXBase::get_chipset_version_() {
+uint8_t VS10XXBase::get_chipset_version_() const {
   // From the datasheet:
   // SCI_STATUS register has SS_VER in bits 4:7
   auto status = this->read_register_(SCI_STATUS);
@@ -159,7 +185,7 @@ uint8_t VS10XXBase::get_chipset_version_() {
   return version;
 }
 
-bool VS10XXBase::test_communication_() {
+bool VS10XXBase::test_communication_() const {
   // The device must have pulled the DREQ pin high at this point.
   if (this->dreq_pin_->digital_read() == false) {
     ESP_LOGE(this->log_tag_, "DREQ is not HIGH, device connected correctly?");
@@ -194,7 +220,7 @@ bool VS10XXBase::test_communication_() {
   }
 }
 
-void VS10XXBase::hard_reset_() {
+void VS10XXBase::hard_reset_() const {
   ESP_LOGD(this->log_tag_, "Hard resetting the device");
   if (this->reset_pin_ == nullptr) {
     ESP_LOGW(this->log_tag_, "Not performing hard reset, no reset pin defined");
@@ -211,7 +237,7 @@ void VS10XXBase::hard_reset_() {
   this->wait_for_data_request_();
 }
 
-void VS10XXBase::soft_reset_() {
+void VS10XXBase::soft_reset_() const {
   ESP_LOGD(this->log_tag_, "Soft resetting the device");
 
   // Turn on "NEW MODE", which means that the two SPI chip select pins XCS and
@@ -230,7 +256,7 @@ void VS10XXBase::soft_reset_() {
   this->wait_for_data_request_();
 }
 
-void VS10XXBase::write_register_(uint8_t reg, uint16_t value) {
+void VS10XXBase::write_register_(uint8_t reg, uint16_t value) const {
   this->control_mode_on_();
   this->spi_->write_byte(2); // write command
   this->spi_->write_byte(reg);
@@ -239,7 +265,7 @@ void VS10XXBase::write_register_(uint8_t reg, uint16_t value) {
   ESP_LOGVV(this->log_tag_, "write_register: 0x%02X: 0x%02X", reg, value);
 }
 
-uint16_t VS10XXBase::read_register_(uint8_t reg) {
+uint16_t VS10XXBase::read_register_(uint8_t reg) const {
   this->control_mode_on_();
   this->spi_->write_byte(3); // read command
   this->spi_->write_byte(reg);
@@ -249,25 +275,25 @@ uint16_t VS10XXBase::read_register_(uint8_t reg) {
   return value;
 }
 
-void VS10XXBase::control_mode_on_() {
+void VS10XXBase::control_mode_on_() const {
   this->spi_->enable();
   this->xdcs_pin_->digital_write(true);
   this->xcs_pin_->digital_write(false);
 }
 
-void VS10XXBase::control_mode_off_() {
+void VS10XXBase::control_mode_off_() const {
   this->spi_->disable();
   this->xdcs_pin_->digital_write(true);
   this->xcs_pin_->digital_write(true);
 }
 
-void VS10XXBase::data_mode_on_() {
+void VS10XXBase::data_mode_on_() const {
   this->spi_->enable();
   this->xcs_pin_->digital_write(true);
   this->xdcs_pin_->digital_write(false);
 }
 
-void VS10XXBase::data_mode_off_() {
+void VS10XXBase::data_mode_off_() const {
   this->spi_->disable();
   this->xdcs_pin_->digital_write(true);
   this->xcs_pin_->digital_write(true);

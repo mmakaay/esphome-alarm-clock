@@ -1,8 +1,8 @@
 #pragma once
 
-#include "vs10xx_spi.h"
 #include "esphome/core/component.h"
 #include "esphome/components/spi/spi.h"
+#include "vs10xx_spi.h"
 
 namespace esphome {
 namespace vs10xx_base {
@@ -13,7 +13,6 @@ namespace vs10xx_base {
 const uint8_t VS10XX_CHUNK_SIZE = 32;
 
 enum State {
-  VS10XX_INIT,
   VS10XX_RESET,
   VS10XX_SETUP_SLOW_SPI,
   VS10XX_SETUP_FAST_SPI,
@@ -70,10 +69,8 @@ enum Chipset {
 class VS10XXBase : public Component {
  public:
   // Objec construction and configuration.
-  explicit VS10XXBase(const char* log_tag, const Chipset supported_chipset);
+  explicit VS10XXBase(const char* tag, const Chipset supported_chipset);
   void set_dreq_pin(GPIOPin *dreq_pin) { this->dreq_pin_ = dreq_pin; }
-  void set_xdcs_pin(GPIOPin *xdcs_pin) { this->xdcs_pin_ = xdcs_pin; }
-  void set_xcs_pin(GPIOPin *xcs_pin) { this->xcs_pin_ = xcs_pin; }
   void set_reset_pin(GPIOPin *reset_pin) { this->reset_pin_ = reset_pin; }
   void set_spi(VS10XXSPI *spi) { this->spi_ = spi; }
 
@@ -88,19 +85,13 @@ class VS10XXBase : public Component {
 
  protected:
   /// The tag to use for log messages.
-  const char* log_tag_;
+  const char* tag_;
 
   /// The VS10XX chipset that is supported by the implementation.
   const Chipset supported_chipset_version_;
 
   /// The interface to the SPI bus.
   VS10XXSPI *spi_;
-
-  /// The XCS pin can be pulled low to lock the SPI bus for a comand.
-  GPIOPin *xcs_pin_;
-
-  /// The XDCS pin can be pulled low to lock the SPI bus for a data transfer.
-  GPIOPin *xdcs_pin_;
 
   /// The DREQ pin, which is used by the device to tell the MCU that
   /// it is open for business. This means: ready to process a command
@@ -148,7 +139,7 @@ class VS10XXBase : public Component {
   uint16_t read_register_(uint8_t reg) const;
 
   // Some utility fields and methods to implement a simple state machine. 
-  State state_{VS10XX_INIT};
+  State state_{VS10XX_RESET};
   uint32_t state_timer_; 
   void to_state_(State state);
   bool state_ms_passed_(uint32_t nr_of_ms) const;

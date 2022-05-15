@@ -56,10 +56,10 @@ async def register_vs10xx_component(var, config):
     cg.add(var.set_dreq_pin(dreq_pin))
 
     xcs_pin = await cg.gpio_pin_expression(config[CONF_XCS_PIN])
-    cg.add(var.set_xcs_pin(xcs_pin))
+    cg.add(spi_wrapper.set_xcs_pin(xcs_pin))
 
     xdcs_pin = await cg.gpio_pin_expression(config[CONF_XDCS_PIN])
-    cg.add(var.set_xdcs_pin(xdcs_pin))
+    cg.add(spi_wrapper.set_xdcs_pin(xdcs_pin))
 
     if CONF_RESET_PIN in config:
         reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])

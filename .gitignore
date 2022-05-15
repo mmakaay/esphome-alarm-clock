@@ -3,7 +3,5 @@ secrets.yaml
 *.sw*
 *.pyc
 
-# Tmp for development (got some inspirational libraries checkout out locally).
-esphome-vs1053/ESP_VS1053_Library/
-esphome-vs1053/VS1003/
-esphome-vs1053/patches
+# Tmp dir for development (e.g. for checking out inspirational libs).
+tmp/

@@ -3,7 +3,7 @@ import esphome.config_validation as cv
 from esphome import automation
 from esphome import pins
 from esphome.components import spi
-from esphome.const import CONF_ID
+from esphome.const import CONF_RESET_PIN
 
 CONF_SPI_FAST_ID = "spi_fast_id"
 CONF_SPI_SLOW_ID = "spi_slow_id"
@@ -15,30 +15,29 @@ CONF_XDCS_PIN = "xdcs_pin"
 CODEOWNERS = ["@mmakaay"]
 DEPENDENCIES = ["spi"]
 
-vs1053_ns = cg.esphome_ns.namespace("vs1053")
-VS1053Component = vs1053_ns.class_("VS1053Component", cg.Component)
-VS1053SlowSPI = vs1053_ns.class_("VS1053SlowSPI", cg.Component, spi.SPIDevice)
-VS1053FastSPI = vs1053_ns.class_("VS1053FastSPI", cg.Component, spi.SPIDevice)
-VS1053SPI = vs1053_ns.class_("VS1053SPI", cg.Component)
+vs10xx_base_ns = cg.esphome_ns.namespace("vs10xx_base")
+VS10XXBase = vs10xx_base_ns.class_("VS10XXBase", cg.Component)
+VS10XXSlowSPI = vs10xx_base_ns.class_("VS10XXSlowSPI", cg.Component, spi.SPIDevice)
+VS10XXFastSPI = vs10xx_base_ns.class_("VS10XXFastSPI", cg.Component, spi.SPIDevice)
+VS10XXSPI = vs10xx_base_ns.class_("VS10XXSPI", cg.Component)
 
-CONFIG_SCHEMA = (
+VS10XX_CONFIG_SCHEMA = (
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(VS1053Component),
-            cv.GenerateID(CONF_SPI_SLOW_ID): cv.declare_id(VS1053SlowSPI),
-            cv.GenerateID(CONF_SPI_FAST_ID): cv.declare_id(VS1053FastSPI),
-            cv.GenerateID(CONF_SPI_WRAPPER_ID): cv.declare_id(VS1053SPI),
+            cv.GenerateID(CONF_SPI_SLOW_ID): cv.declare_id(VS10XXSlowSPI),
+            cv.GenerateID(CONF_SPI_FAST_ID): cv.declare_id(VS10XXFastSPI),
+            cv.GenerateID(CONF_SPI_WRAPPER_ID): cv.declare_id(VS10XXSPI),
             cv.Required(CONF_DREQ_PIN): pins.gpio_input_pin_schema,
             cv.Required(CONF_XDCS_PIN): pins.gpio_output_pin_schema,
             cv.Required(CONF_XCS_PIN): pins.gpio_output_pin_schema,
+            cv.Optional(CONF_RESET_PIN): pins.gpio_output_pin_schema,
         }
     )  
     .extend(cv.COMPONENT_SCHEMA)
     .extend(spi.spi_device_schema(False))
 )
 
-async def to_code(config):
-    var = cg.new_Pvariable(config[CONF_ID])
+async def register_vs10xx_component(var, config):
     await cg.register_component(var, config)
 
     spi_wrapper = cg.new_Pvariable(config[CONF_SPI_WRAPPER_ID])
@@ -62,3 +61,6 @@ async def to_code(config):
     xdcs_pin = await cg.gpio_pin_expression(config[CONF_XDCS_PIN])
     cg.add(var.set_xdcs_pin(xdcs_pin))
 
+    if CONF_RESET_PIN in config:
+        reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
+        cg.add(var.set_reset_pin(reset_pin))

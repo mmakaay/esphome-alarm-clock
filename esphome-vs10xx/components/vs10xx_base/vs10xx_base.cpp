@@ -6,7 +6,6 @@ namespace vs10xx_base {
 
 VS10XXBase::VS10XXBase(const char* tag, const Chipset supported_chipset) : tag_(tag), supported_chipset_version_(supported_chipset) {}
 
-
 void VS10XXBase::setup() {
   this->dreq_pin_->setup();
   this->spi_->set_tag(this->tag_);
@@ -113,6 +112,8 @@ void VS10XXBase::state_setup_slow_spi_() {
     ESP_LOGE(this->tag_, "Unsupported chipset version: %d", chipset);
     this->to_state_(VS10XX_REPORT_FAILED); 
     return;
+  } else {
+    ESP_LOGD(this->tag_, "Chipset version: %d, OK", chipset);
   }
 
   // Set device clock multiplier to the recommended value for typical use.
@@ -211,13 +212,23 @@ void VS10XXBase::hard_reset_() const {
     ESP_LOGW(this->tag_, "Not performing hard reset, no reset pin defined");
     return;
   }
-  // When the XRESET-signal is driven low, the device is reset.
+
+  // By driving the XRESET-signal low, the device is reset.
   this->reset_pin_->digital_write(false);
   delay(1);
   this->reset_pin_->digital_write(true);
+
+  // Sanity check: DREQ should be LOW at this point. If not, then the
+  // DREQ pin might not be connected correctly.
+  if (this->data_request_ready_()) {
+    ESP_LOGE(this->tag_, "DREQ is unexpectedly HIGH after hard reset");
+  }
+
   // The datasheet specifies max 50000 XTALI cycles for boot initialization.
   // At the default XTALI of 12.288 MHz, this takes about 4ms.
+  // Therefore, 5ms ought to be enough for the device to become ready.
   delay(5);
+
   // After initialization, the DREQ pin is pulled HIGH.
   this->wait_for_data_request_();
 }

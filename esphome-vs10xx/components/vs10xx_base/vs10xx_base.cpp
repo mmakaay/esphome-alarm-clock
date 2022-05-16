@@ -48,32 +48,6 @@ void VS10XXBase::loop() {
   }
 }
 
-// Implementation based on example code provided by plugin manuals, e.g.
-// https://www.vlsi.fi/fileadmin/software/VS10XX/dacpatch.pdf
-// This code is able to translate the compressed plugin format
-// into SPI register writes.
-void VS10XXBase::load_user_code(const unsigned short *plugin, size_t size) {
-  int i = 0;
-  while (i < size) {
-    uint8_t addr = plugin[i++];
-    uint16_t n = plugin[i++];
-    // Replication mode: write multiple samples of the same value.
-    if (n & 0x8000U) {
-      n = n & 0x7FFF;
-      uint16_t value = plugin[i++];
-      while (n--) {
-        this->spi_->write_register(addr, value);
-      }
-    // Copy mode: write multiple values.
-    } else {
-      while (n--) {
-        uint16_t value = plugin[i++];
-        this->spi_->write_register(addr, value);
-      }
-    }
-  }
-}
-
 void VS10XXBase::state_reset_() {
   // Sanity check in case no reset pin is defined.
   if (!this->data_request_ready_() && this->reset_pin_ == nullptr) {
@@ -110,7 +84,8 @@ void VS10XXBase::state_setup_slow_spi_() {
   // Check if the expected VS10XX chipset is in use.
   auto chipset = this->get_chipset_version_();
   if (chipset != this->supported_chipset_version_) {
-    ESP_LOGE(this->tag_, "Unsupported chipset version: %d", chipset);
+    ESP_LOGE(this->tag_, "Unsupported chipset version: %d (expected %d)",
+             chipset, this->supported_chipset_version_);
     this->to_state_(VS10XX_REPORT_FAILED); 
     return;
   } else {
@@ -138,14 +113,15 @@ void VS10XXBase::state_setup_fast_spi_() {
     return;
   }
 
-  // Load plugins.
+  // Apply plugins by loading them into the device.
   for (auto *plugin : this->plugins_) {
     plugin->apply();
   }
 
   // Setup the device audio.
+  // Volume 0xFFFF means: turn off the output completely. 
   ESP_LOGD(this->tag_, "Turning on analog audio at 44.1kHz");
-  this->spi_->write_register(SCI_VOL, 0xffff);
+  this->spi_->write_register(SCI_VOL, 0XFFFF);
   this->spi_->write_register(SCI_AUDATA, 44101);
 
   // All is okay, the device can be used.

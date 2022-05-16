@@ -7,6 +7,19 @@ namespace vs1003 {
 
 using namespace vs10xx_base;
 
+/// When you need to play stereo files but only use one of the
+/// analog outputs, this is the patch for you. The VS1003 Mono
+/// Patch replaces the regular DAC interrupt handler and plays
+/// all output as mono.
+///
+/// File : dacpatch.plg
+/// IRAM : 0x4e0 .. 0x4f3
+///
+/// When you load the patch, it is automatically installed into
+/// the DAC interrupt handler. If you want to disable the patch,
+/// give a software reset.
+///
+/// Se: https://www.vlsi.fi/fileadmin/software/VS10XX/dacpatch.pdf
 class VS1003PluginDacMono: public VS10XXPlugin {
   using VS10XXPlugin::VS10XXPlugin;
 

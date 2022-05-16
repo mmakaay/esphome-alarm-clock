@@ -86,10 +86,6 @@ class VS10XXBase : public Component {
   void dump_config() override;
   void loop() override;
 
-  /// Load patches or plugin code (in compressed plugin .plg format) into
-  /// the device. These can be found on the VLSI site: http://www.vlsi.fi
-  void load_user_code(const unsigned short *plugin, size_t size);
-
  protected:
   /// The tag to use for log messages.
   const char* tag_;

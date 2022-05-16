@@ -3,6 +3,8 @@
 #include "esphome/core/component.h"
 #include "esphome/components/spi/spi.h"
 #include "vs10xx_spi.h"
+#include "vs10xx_plugin.h"
+#include <vector>
 
 namespace esphome {
 namespace vs10xx_base {
@@ -21,6 +23,7 @@ enum State {
   VS10XX_READY
 };
 
+/// Serial Command Interface (SCI) registers.
 enum SCI_Register {
   SCI_MODE = 0,
   SCI_STATUS = 1,
@@ -37,6 +40,8 @@ enum SCI_Register {
   SCI_NUM_REGISTERS = 15 
 };
 
+/// Serial Command Interface (SCI) mode bits that are used for setting the
+/// SCI registers.
 enum SCI_ModeBits {
   SM_DIFF = 1<<0,
   SM_LAYER12 = 1<<1,
@@ -55,24 +60,26 @@ enum SCI_ModeBits {
   SM_LINE_IN = 1<<14,
 };
 
+// Known chipset versions.
 enum Chipset {
-  SS_VER_VS1001 = 0,
-  SS_VER_VS1011 = 1,
-  SS_VER_VS1002 = 2,
-  SS_VER_VS1003 = 3,
-  SS_VER_VS1053 = 4,
-  SS_VER_VS1033 = 5,
-  SS_VER_VS1103 = 6,
-  SS_VER_VS1063 = 7,
+  CHIPSET_VS1001 = 0,
+  CHIPSET_VS1011 = 1,
+  CHIPSET_VS1002 = 2,
+  CHIPSET_VS1003 = 3,
+  CHIPSET_VS1053 = 4,
+  CHIPSET_VS1033 = 5,
+  CHIPSET_VS1103 = 6,
+  CHIPSET_VS1063 = 7,
 };
 
 class VS10XXBase : public Component {
  public:
-  // Objec construction and configuration.
+  // Object construction and configuration.
   explicit VS10XXBase(const char* tag, const Chipset supported_chipset);
   void set_dreq_pin(GPIOPin *dreq_pin) { this->dreq_pin_ = dreq_pin; }
   void set_reset_pin(GPIOPin *reset_pin) { this->reset_pin_ = reset_pin; }
   void set_spi(VS10XXSPI *spi) { this->spi_ = spi; }
+  void add_plugin(VS10XXPlugin *plugin) { this->plugins_.push_back(plugin); }
 
   // These must be called by derived classes from their respective methods.
   void setup() override;
@@ -102,6 +109,9 @@ class VS10XXBase : public Component {
   /// EN pin or Vcc for example), then the device can be turned on and off.
   /// Turning it off through the reset pin, offers the best power saving.
   GPIOPin *reset_pin_{nullptr};
+
+  /// Plugins to load for this device.
+  std::vector<VS10XXPlugin*> plugins_{};
 
   /// Trigger a hard reset.
   /// This will only work when a reset pin has been defined.

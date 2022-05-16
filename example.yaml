@@ -553,6 +553,8 @@ vs1003:
   xcs_pin: GPIO32
   xdcs_pin: GPIO33
   dreq_pin: GPIO15
+  plugins:
+    - dacmono
  
 apds9960:
   update_interval: 500ms

@@ -1,22 +1,22 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
-from esphome import automation
-from esphome import pins
-from esphome.components import vs10xx_base
-from esphome.const import CONF_ID
+from esphome.components.vs10xx_base import (
+    VS10XXBase,
+    VS10XXPlugin,
+    vs10xx_device_schema,
+    register_vs10xx_component,
+)
 
 CODEOWNERS = ["@mmakaay"]
 AUTO_LOAD = ["vs10xx_base"]
 
 vs1003_ns = cg.esphome_ns.namespace("vs1003")
-VS1003Component = vs1003_ns.class_("VS1003Component", vs10xx_base.VS10XXBase)
+VS1003Component = vs1003_ns.class_("VS1003Component", VS10XXBase)
 
-CONFIG_SCHEMA = vs10xx_base.VS10XX_CONFIG_SCHEMA.extend(
-    {
-        cv.GenerateID(): cv.declare_id(VS1003Component),
-    }
-)
+plugins = {
+    "dacmono": vs1003_ns.class_("VS1003PluginDacMono", VS10XXPlugin)
+}
+
+CONFIG_SCHEMA = vs10xx_device_schema(VS1003Component, plugins)
 
 async def to_code(config):
-    var = cg.new_Pvariable(config[CONF_ID])
-    await vs10xx_base.register_vs10xx_component(var, config)
+    await register_vs10xx_component(config, plugins)

@@ -7,6 +7,7 @@ namespace vs10xx_base {
 VS10XXBase::VS10XXBase(const char* tag, const Chipset supported_chipset) : tag_(tag), supported_chipset_version_(supported_chipset) {}
 
 void VS10XXBase::setup() {
+  ESP_LOGCONFIG(this->tag_, "Setting up device");
   this->dreq_pin_->setup();
   this->spi_->set_tag(this->tag_);
   if (this->reset_pin_ != nullptr) {
@@ -47,7 +48,7 @@ void VS10XXBase::loop() {
   }
 }
 
-// Code based on example code provided by plugin manuals, e.g.
+// Implementation based on example code provided by plugin manuals, e.g.
 // https://www.vlsi.fi/fileadmin/software/VS10XX/dacpatch.pdf
 // This code is able to translate the compressed plugin format
 // into SPI register writes.
@@ -172,11 +173,6 @@ uint8_t VS10XXBase::get_chipset_version_() const {
 }
 
 bool VS10XXBase::test_communication_() const {
-  // The device must have pulled the DREQ pin high at this point.
-  if (this->dreq_pin_->digital_read() == false) {
-    ESP_LOGE(this->tag_, "DREQ is not HIGH, device connected correctly?");
-    return false;
-  }
   // Now test if we can write and read data over the
   // bus without errors. In fast SPI mode, we can perform more
   // write operations in the same time.

@@ -5,11 +5,13 @@ namespace esphome {
 namespace vs10xx_base {
 
 void VS10XXSPI::setup() {
-  this->slow_spi_->spi_setup();
-  this->fast_spi_->spi_setup();
-
+  this->xdcs_pin_->setup();
+  this->xcs_pin_->setup();
   this->xdcs_pin_->digital_write(true);
   this->xcs_pin_->digital_write(true);
+
+  this->slow_spi_->spi_setup();
+  this->fast_spi_->spi_setup();
 }
 
 void VS10XXSPI::log_config() {

@@ -138,6 +138,11 @@ void VS10XXBase::state_setup_fast_spi_() {
     return;
   }
 
+  // Load plugins.
+  for (auto *plugin : this->plugins_) {
+    plugin->apply();
+  }
+
   // Setup the device audio.
   ESP_LOGD(this->tag_, "Turning on analog audio at 44.1kHz");
   this->spi_->write_register(SCI_VOL, 0xffff);
@@ -182,6 +187,13 @@ bool VS10XXBase::test_communication_() const {
   for (int value = 0; value < 0xFFFF; value += step_size) {
     cycles++;
     this->spi_->write_register(SCI_VOL, value);
+
+    // Sanity check: DREQ should be LOW at this point. If not, then the
+    // DREQ pin might not be connected correctly.
+    if (cycles == 1 && this->data_request_ready_()) {
+      ESP_LOGE(this->tag_, "DREQ is unexpectedly HIGH after sending command");
+    }
+
     auto read1 = this->spi_->read_register(SCI_VOL);
     auto read2 = this->spi_->read_register(SCI_VOL);
     if (value != read1 || value != read2) {
@@ -213,12 +225,6 @@ void VS10XXBase::hard_reset_() const {
   this->reset_pin_->digital_write(false);
   delay(1);
   this->reset_pin_->digital_write(true);
-
-  // Sanity check: DREQ should be LOW at this point. If not, then the
-  // DREQ pin might not be connected correctly.
-  if (this->data_request_ready_()) {
-    ESP_LOGE(this->tag_, "DREQ is unexpectedly HIGH after hard reset");
-  }
 
   // The datasheet specifies max 50000 XTALI cycles for boot initialization.
   // At the default XTALI of 12.288 MHz, this takes about 4ms.

@@ -62,7 +62,6 @@ class VS10XXSPI : public Component {
   void write_byte_(uint8_t value) const;
   void write_byte16_(uint16_t value) const;
   uint8_t read_byte_() const;
-
 };
 
 }  // namespace vs10xx_base

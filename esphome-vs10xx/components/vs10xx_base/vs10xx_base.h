@@ -72,6 +72,11 @@ enum Chipset {
   CHIPSET_VS1063 = 7,
 };
 
+struct VS10XXVolume {
+  uint8_t left;
+  uint8_t right;
+};
+
 class VS10XXBase : public Component {
  public:
   // Object construction and configuration.
@@ -85,6 +90,15 @@ class VS10XXBase : public Component {
   void setup() override;
   void dump_config() override;
   void loop() override;
+
+  /// Turn off the analog output completely.
+  void turn_off_output();
+
+  /// Set the volume for the left and right analog output channels.
+  void set_volume(VS10XXVolume volume);
+
+  /// Get the volume for the left and right analog output channels.
+  VS10XXVolume get_volume() const;
 
  protected:
   /// The tag to use for log messages.
@@ -114,11 +128,11 @@ class VS10XXBase : public Component {
   /// A hard reset will reset all control registers and internal states
   /// of the device to their initial values. So after this, all software
   /// registers must be setup for decoding to work.
-  void hard_reset_() const;
+  void hard_reset_();
 
   /// Trigger a soft reset.
   /// This will reset the software decoder of the device.
-  void soft_reset_() const;
+  void soft_reset_();
 
   /// Returns the version of the VS10XX chipset.
   /// The vs10xx_base::Chipset enum contains the known chipset versions
@@ -128,21 +142,13 @@ class VS10XXBase : public Component {
   /// Perform tests on the SPI communication to see if the bus is working.
   bool test_communication_() const;
 
-  /// Wait for the device to become ready for action. 
-  /// Note that this call is blocking. It would be better to modify this
-  /// to make the waiting part of the loop code, so it doesn't block.
-  void wait_for_data_request_() const;
-
   /// Checks if the device is ready for action.
   bool data_request_ready_() const;
 
-  // SPI interaction methods.
-  void control_mode_on_() const;
-  void control_mode_off_() const;
-  void data_mode_on_() const;
-  void data_mode_off_() const;
-  void write_register_(uint8_t reg, uint16_t value) const;
-  uint16_t read_register_(uint8_t reg) const;
+  /// Wait for the device to become ready for action. 
+  /// When the timeout (default 500ms) is reached without the device
+  /// becoming ready, then false is returned, otherwise true.
+  bool wait_for_data_request_(uint16_t timeout_ms=500);
 
   // Some utility fields and methods to implement a simple state machine. 
   State state_{VS10XX_RESET};

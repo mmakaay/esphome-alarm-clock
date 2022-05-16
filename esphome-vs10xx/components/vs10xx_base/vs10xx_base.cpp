@@ -1,5 +1,6 @@
 #include "vs10xx_base.h"
 #include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
 
 namespace esphome {
 namespace vs10xx_base {
@@ -131,7 +132,7 @@ void VS10XXBase::state_setup_fast_spi_() {
 }
 
 void VS10XXBase::state_report_failed_() {
-    ESP_LOGE(this->tag_, "Device initialized failed");
+    ESP_LOGE(this->tag_, "Device initialization failed");
 
     this->to_state_(VS10XX_FAILED);
 }
@@ -191,7 +192,7 @@ bool VS10XXBase::test_communication_() const {
   }
 }
 
-void VS10XXBase::hard_reset_() const {
+void VS10XXBase::hard_reset_() {
   ESP_LOGD(this->tag_, "Hard resetting the device");
   if (this->reset_pin_ == nullptr) {
     ESP_LOGW(this->tag_, "Not performing hard reset, no reset pin defined");
@@ -203,16 +204,15 @@ void VS10XXBase::hard_reset_() const {
   delay(1);
   this->reset_pin_->digital_write(true);
 
+  // After initialization, the DREQ ought to be pulled HIGH.
   // The datasheet specifies max 50000 XTALI cycles for boot initialization.
   // At the default XTALI of 12.288 MHz, this takes about 4ms.
   // Therefore, 5ms ought to be enough for the device to become ready.
   delay(5);
-
-  // After initialization, the DREQ pin is pulled HIGH.
   this->wait_for_data_request_();
 }
 
-void VS10XXBase::soft_reset_() const {
+void VS10XXBase::soft_reset_() {
   ESP_LOGD(this->tag_, "Soft resetting the device");
 
   // Turn on "NEW MODE", which means that the two SPI chip select pins XCS and
@@ -231,14 +231,48 @@ void VS10XXBase::soft_reset_() const {
   this->wait_for_data_request_();
 }
 
+void VS10XXBase::turn_off_output() {
+  ESP_LOGD(this->tag_, "Turn off analog output");
+  if (this->wait_for_data_request_()) {
+    this->spi_->write_register(SCI_VOL, 0xFFFF);    
+    this->wait_for_data_request_();
+  }
+}
+
+void VS10XXBase::set_volume(VS10XXVolume volume) {
+  auto left = clamp<uint8_t>(volume.left, 0, 32);
+  auto right = clamp<uint8_t>(volume.right, 0, 32);
+  ESP_LOGD(this->tag_, "Set output volume: left=%d, right=%d", left, right);
+  if (this->wait_for_data_request_()) {
+    // Translate 0 - 32 scale into 254 - 0 scale as used by the device.
+    uint16_t left_ = std::max(0, 254 - left*8);
+    uint16_t right_ = std::max(0, 254 - right*8);
+    this->spi_->write_register(SCI_VOL, (left_ << 8) | right_);
+    this->wait_for_data_request_();
+  }
+}
+
+VS10XXVolume VS10XXBase::get_volume() const {
+  uint16_t value = this->spi_->read_register(SCI_VOL);
+  return { (uint8_t)(value && 0xFF00) >> 8, (uint8_t)(value & 0xFF) };
+}
+
 bool VS10XXBase::data_request_ready_() const {
   return this->dreq_pin_->digital_read() == true;
 }
 
-void VS10XXBase::wait_for_data_request_() const {
+bool VS10XXBase::wait_for_data_request_(uint16_t timeout_ms) {
+  auto timeout_at = millis() + timeout_ms;
   while (!this->data_request_ready_()) {
+    if (millis() > timeout_at) {
+      ESP_LOGE(this->tag_, "DREQ not HIGH within %dms timeout", timeout_ms);
+      ESP_LOGD(this->tag_, "Flagging device as failed");
+      this->to_state_(VS10XX_FAILED); 
+      return false;
+    }
     delay(1);
   }
+  return true;
 }
 
 }  // namespace vs10xx_base

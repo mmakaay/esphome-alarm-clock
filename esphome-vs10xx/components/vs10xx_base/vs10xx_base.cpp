@@ -115,6 +115,7 @@ void VS10XXBase::state_setup_fast_spi_() {
 
   // Apply plugins by loading them into the device.
   for (auto *plugin : this->plugins_) {
+    ESP_LOGD(this->tag_, "Apply plugin: %s", plugin->description());
     plugin->apply();
   }
 

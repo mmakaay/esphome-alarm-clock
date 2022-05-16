@@ -29,11 +29,15 @@ using namespace vs10xx_base;
 /// This patch is not compatible with the MPEG2.0 Layer 2 Patch nor with
 /// the MPEG2.5 Layer-3 8kHz Stereo Patch.
 ///
-/// See: https://www.vlsi.fi/fileadmin/software/VS10XX/wavfix.pdf
+/// See:
+/// - https://www.vlsi.fi/en/support/software/vs10xxpatches.html
+/// - https://www.vlsi.fi/fileadmin/software/VS10XX/wavfix.pdf
 class VS1003PluginWavFix: public VS10XXPlugin {
   using VS10XXPlugin::VS10XXPlugin;
 
-  const char* tag_() const override { return "vs1003/wavfix"; }
+  const char* description() const override {
+    return "wavfix: allow WAV parser to skip unknown chunks";
+  }
 
   const std::vector<uint16_t> plugin_data_() override {
     return {

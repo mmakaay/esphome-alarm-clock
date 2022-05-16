@@ -34,10 +34,15 @@ using namespace vs10xx_base;
 ///
 /// Note: this plugin was not available in the compressed plugin format,
 /// so I had to convert the original patch into this format.
+///
+/// See:
+/// - https://www.vlsi.fi/en/support/software/vs10xxpatches.html
 class VS1003Plugin8kHzMp3Fix: public VS10XXPlugin {
   using VS10XXPlugin::VS10XXPlugin;
 
-  const char* tag_() const override { return "vs1003/8khzmp3fix"; }
+  const char* description() const override {
+    return "8khzmp3fix: MP3 fix for 8kHz stereo MPEG 2.5";
+  }
 
   const std::vector<uint16_t> plugin_data_() override {
     return {

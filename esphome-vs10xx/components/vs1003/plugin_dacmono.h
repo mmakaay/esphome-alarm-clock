@@ -19,11 +19,15 @@ using namespace vs10xx_base;
 /// the DAC interrupt handler. If you want to disable the patch,
 /// give a software reset.
 ///
-/// Se: https://www.vlsi.fi/fileadmin/software/VS10XX/dacpatch.pdf
+/// See:
+/// - https://www.vlsi.fi/en/support/software/vs10xxpatches.html
+/// - https://www.vlsi.fi/fileadmin/software/VS10XX/dacpatch.pdf
 class VS1003PluginDacMono: public VS10XXPlugin {
   using VS10XXPlugin::VS10XXPlugin;
 
-  const char* tag_() const override { return "vs1003/dacmono"; }
+  const char* description() const override {
+    return "dacmono: play all DAC output as mono";
+  }
 
   const std::vector<uint16_t> plugin_data_() override {
     return {

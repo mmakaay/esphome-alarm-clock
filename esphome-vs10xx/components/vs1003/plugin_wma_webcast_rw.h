@@ -22,11 +22,15 @@ using namespace vs10xx_base;
 /// Compat : The patch takes over the whole system, so you can’t
 ///          use other patches at the same time.
 ///
-/// See: https://www.vlsi.fi/fileadmin/software/VS10XX/wmawebcast.pdf
+/// See:
+/// - https://www.vlsi.fi/en/support/software/vs10xxpatches.html
+/// - https://www.vlsi.fi/fileadmin/software/VS10XX/wmawebcast.pdf
 class VS1003WMAWebcastRewind: public VS10XXPlugin {
   using VS10XXPlugin::VS10XXPlugin;
 
-  const char* tag_() const override { return "vs1003/wma_webcast_rewind"; }
+  const char* description() const override {
+    return "wmarew4: make WMA Rewind/Fast forward easier";
+  }
 
   const std::vector<uint16_t> plugin_data_() override {
     return {

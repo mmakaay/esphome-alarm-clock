@@ -1,5 +1,4 @@
 #include "vs10xx_plugin.h"
-#include "esphome/core/log.h"
 
 namespace esphome {
 namespace vs10xx_base {
@@ -11,8 +10,6 @@ VS10XXPlugin::VS10XXPlugin(VS10XXSPI *spi) : spi_(spi) {}
 // This code is able to translate the compressed plugin format
 // into SPI register writes.
 void VS10XXPlugin::apply() {
-  ESP_LOGD(this->tag_(), "Applying patch to device");
-
   size_t i = 0;
   auto plugin = this->plugin_data_();
   auto plugin_size = plugin.size();
@@ -36,8 +33,6 @@ void VS10XXPlugin::apply() {
       }
     }
   }
-
-  ESP_LOGD(this->tag_(), "Patch applied to device");
 }
 
 }  // namespace vs10xx_base

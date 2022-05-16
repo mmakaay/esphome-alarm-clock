@@ -16,6 +16,9 @@ class VS10XXPlugin {
  public:
   explicit VS10XXPlugin(VS10XXSPI *spi);
 
+  /// Provide a short description for the plugin. 
+  virtual const char* description() const = 0;
+
   /// Apply the plugin code by sending it to the device.
   void apply();
 
@@ -23,10 +26,7 @@ class VS10XXPlugin {
   /// The SPI interface of the device to patch.
   VS10XXSPI *spi_;
 
-  /// Return the log tag to use for this plugin.
-  virtual const char* tag_() const  = 0;
-
-  /// Return the plugin code, in compressed plugin format.
+  /// Provide the plugin code, in compressed plugin format.
   /// This code can be copied literally from a downloaded .plg file.
   virtual const std::vector<uint16_t> plugin_data_() = 0;
 };

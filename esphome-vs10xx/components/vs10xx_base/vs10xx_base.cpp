@@ -122,7 +122,7 @@ void VS10XXBase::state_setup_fast_spi_() {
 
   // Setup the device audio.
   // Volume 0xFFFF means: turn off the output completely. 
-  ESP_LOGD(this->tag_, "Turning on analog audio at 44.1kHz");
+  ESP_LOGD(this->tag_, "Turning on analog audio at 44.1kHz stereo");
   this->spi_->write_register(SCI_VOL, 0XFFFF);
   this->spi_->write_register(SCI_AUDATA, 44101);
 
@@ -191,6 +191,7 @@ bool VS10XXBase::test_communication_() const {
     return false;
   }
 }
+  ESP_LOGD(this->tag_, "Output volume set to left=%d, right=%d", v.left, v.right);
 
 void VS10XXBase::hard_reset_() {
   ESP_LOGD(this->tag_, "Hard resetting the device");
@@ -240,21 +241,30 @@ void VS10XXBase::turn_off_output() {
 }
 
 void VS10XXBase::set_volume(VS10XXVolume volume) {
-  auto left = clamp<uint8_t>(volume.left, 0, 32);
-  auto right = clamp<uint8_t>(volume.right, 0, 32);
+  auto left = clamp<uint8_t>(volume.left, 0, 30);
+  auto right = clamp<uint8_t>(volume.right, 0, 30);
   ESP_LOGD(this->tag_, "Set output volume: left=%d, right=%d", left, right);
   if (this->wait_for_data_request_()) {
-    // Translate 0 - 32 scale into 254 - 0 scale as used by the device.
-    uint16_t left_ = std::max(0, 254 - left*8);
-    uint16_t right_ = std::max(0, 254 - right*8);
-    this->spi_->write_register(SCI_VOL, (left_ << 8) | right_);
+    // Translate 0 - 30 scale into 254 - 0 scale as used by the device.
+    uint16_t left_ = (uint8_t)(254.0f - left * 254.0f/30.0f);
+    uint16_t right_ = (uint8_t)(254.0f - right * 254.0f/30.0f);
+    uint16_t value = (left_ << 8) | right_;
+    this->spi_->write_register(SCI_VOL, value);
     this->wait_for_data_request_();
   }
+  auto v = this->get_volume();
 }
 
 VS10XXVolume VS10XXBase::get_volume() const {
   uint16_t value = this->spi_->read_register(SCI_VOL);
-  return { (uint8_t)(value && 0xFF00) >> 8, (uint8_t)(value & 0xFF) };
+  uint8_t left_ = (uint8_t)((value & 0xFF00) >> 8);
+  uint8_t right_ = (uint8_t)(value & 0x00FF);
+  uint8_t left = (int8_t)(30.0f - left_ * 30.0f/254.0f);
+  uint8_t right = (int8_t)(30.0f - right_ * 30.0f/254.0f);
+  return VS10XXVolume {
+    left: left,
+    right: right
+  };
 }
 
 bool VS10XXBase::data_request_ready_() const {

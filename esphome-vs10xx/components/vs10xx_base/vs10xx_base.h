@@ -95,6 +95,7 @@ class VS10XXBase : public Component {
   void turn_off_output();
 
   /// Set the volume for the left and right analog output channels.
+  /// The volume level range is 0 (silence) - 30 (max volume).
   void set_volume(VS10XXVolume volume);
 
   /// Get the volume for the left and right analog output channels.

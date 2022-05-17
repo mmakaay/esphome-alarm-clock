@@ -3,13 +3,11 @@
 namespace esphome {
 namespace vs10xx_base {
 
-VS10XXPlugin::VS10XXPlugin(VS10XXSPI *spi) : spi_(spi) {}
-
 // Implementation based on example code provided by plugin manuals, e.g.
 // https://www.vlsi.fi/fileadmin/software/VS10XX/dacpatch.pdf
 // This code is able to translate the compressed plugin format
 // into SPI register writes.
-void VS10XXPlugin::apply() {
+bool VS10XXPlugin::load(VS10XXHAL *hal) {
   size_t i = 0;
   auto plugin = this->plugin_data_();
   auto plugin_size = plugin.size();
@@ -23,16 +21,22 @@ void VS10XXPlugin::apply() {
       n = n & 0x7FFF;
       uint16_t value = plugin[i++];
       while (n--) {
-        this->spi_->write_register(addr, value);
+        if (!hal->write_register(addr, value)) {
+          return false;
+        }
       }
     // Copy mode: write multiple values.
     } else {
       while (n--) {
         uint16_t value = plugin[i++];
-        this->spi_->write_register(addr, value);
+        if (!hal->write_register(addr, value)) {
+          return false;
+        }
       }
     }
   }
+
+  return hal->wait_for_ready();
 }
 
 }  // namespace vs10xx_base

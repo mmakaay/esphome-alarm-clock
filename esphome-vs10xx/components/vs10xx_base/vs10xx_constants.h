@@ -8,53 +8,47 @@ namespace vs10xx_base {
 const uint8_t VS10XX_CHUNK_SIZE = 32;
 
 /// Serial Command Interface (SCI) registers.
-enum SCI_Register {
-  SCI_MODE = 0,
-  SCI_STATUS = 1,
-  SCI_BASS = 2,
-  SCI_CLOCKF = 3,
-  SCI_DECODE_TIME = 4,
-  SCI_AUDATA = 5,
-  SCI_WRAM = 6,
-  SCI_WRAMADDR = 7,
-  SCI_AIADDR = 10,
-  SCI_VOL = 11,
-  SCI_AICTRL0 = 12,
-  SCI_AICTRL1 = 13,
-  SCI_NUM_REGISTERS = 15 
-};
+const uint8_t SCI_MODE = 0;
+const uint8_t SCI_STATUS = 1;
+const uint8_t SCI_BASS = 2;
+const uint8_t SCI_CLOCKF = 3;
+const uint8_t SCI_DECODE_TIME = 4;
+const uint8_t SCI_AUDATA = 5;
+const uint8_t SCI_WRAM = 6;
+const uint8_t SCI_WRAMADDR = 7;
+const uint8_t SCI_AIADDR = 10;
+const uint8_t SCI_VOL = 11;
+const uint8_t SCI_AICTRL0 = 12;
+const uint8_t SCI_AICTRL1 = 13;
+const uint8_t SCI_NUM_REGISTERS = 15;
 
 /// Serial Command Interface (SCI) mode bits that are used for setting the
 /// SCI registers.
-enum SCI_ModeBits {
-  SM_DIFF = 1<<0,
-  SM_LAYER12 = 1<<1,
-  SM_RESET = 1<<2,
-  SM_OUTOFWAV = 1<<3,
-  SM_EARSPEAKER_LO = 1<<4,
-  SM_TESTS = 1<<5,
-  SM_STREAM = 1<<6,
-  SM_EARSPEAKER_HI = 1<<7,
-  SM_DACT = 1<<8,
-  SM_SDIORD = 1<<9,
-  SM_SDISHARE = 1<<10,
-  SM_SDINEW = 1<<11,
-  SM_ADPCM = 1<<12,
-  SM_ADCPM_HP = 1<<13,
-  SM_LINE_IN = 1<<14,
-};
+const uint16_t SM_DIFF = 1<<0;
+const uint16_t SM_LAYER12 = 1<<1;
+const uint16_t SM_RESET = 1<<2;
+const uint16_t SM_CANCEL = 1<<3; // SM_OUTOFWAV before VS1053b
+const uint16_t SM_EARSPEAKER_LO = 1<<4;
+const uint16_t SM_TESTS = 1<<5;
+const uint16_t SM_STREAM = 1<<6;
+const uint16_t SM_EARSPEAKER_HI = 1<<7;
+const uint16_t SM_DACT = 1<<8;
+const uint16_t SM_SDIORD = 1<<9;
+const uint16_t SM_SDISHARE = 1<<10;
+const uint16_t SM_SDINEW = 1<<11;
+const uint16_t SM_ADPCM = 1<<12;
+const uint16_t SM_ADCPM_HP = 1<<13;
+const uint16_t SM_LINE_IN = 1<<14;
 
 // Known chipset versions.
-enum Chipset {
-  CHIPSET_VS1001 = 0,
-  CHIPSET_VS1011 = 1,
-  CHIPSET_VS1002 = 2,
-  CHIPSET_VS1003 = 3,
-  CHIPSET_VS1053 = 4,
-  CHIPSET_VS1033 = 5,
-  CHIPSET_VS1103 = 6,
-  CHIPSET_VS1063 = 7,
-};
+const uint8_t CHIPSET_VS1001 = 0;
+const uint8_t CHIPSET_VS1011 = 1;
+const uint8_t CHIPSET_VS1002 = 2;
+const uint8_t CHIPSET_VS1003 = 3;
+const uint8_t CHIPSET_VS1053 = 4;
+const uint8_t CHIPSET_VS1033 = 5;
+const uint8_t CHIPSET_VS1103 = 6;
+const uint8_t CHIPSET_VS1063 = 7;
 
 }  // namespace vs10xx
 }  // namespace esphome

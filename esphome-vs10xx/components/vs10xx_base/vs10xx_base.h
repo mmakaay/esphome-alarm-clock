@@ -10,6 +10,7 @@
 namespace esphome {
 namespace vs10xx_base {
 
+/// States used by the VS10XXBase code to implement its state machine. 
 enum State {
   VS10XX_RESET,
   VS10XX_INIT_PHASE_1,
@@ -19,48 +20,35 @@ enum State {
   VS10XX_READY
 };
 
-struct VS10XXVolume {
-  uint8_t left;
-  uint8_t right;
-};
-
 class VS10XXBase : public Component {
  public:
   // Object construction and configuration.
-  explicit VS10XXBase(const char* tag, const Chipset supported_chipset);
+  explicit VS10XXBase(const char* name, const char* tag, const uint8_t supported_chipset);
   void set_hal(VS10XXHAL *hal) { this->hal_ = hal; }
+  VS10XXHAL* hal() { return this->hal_; }
   void add_plugin(VS10XXPlugin *plugin) { this->plugins_.push_back(plugin); }
 
-  // These must be called by derived classes from their respective methods.
+  // These must be called by derived classes from their respective methods
+  // when those are overridden.
   void setup() override;
   void dump_config() override;
   void loop() override;
 
-  /// Turn off the analog output completely.
-  void turn_off_output();
-
-  /// Set the volume for the left and right analog output channels.
-  /// The volume level range is 0 (silence) - 30 (max volume).
-  void set_volume(VS10XXVolume volume);
-
-  /// Get the volume for the left and right analog output channels.
-  VS10XXVolume get_volume() const;
-
  protected:
+  /// The name of this component.
+  const char* name_;
+
   /// The tag to use for log messages.
   const char* tag_;
 
   /// The VS10XX chipset that is supported by the implementation.
-  const Chipset supported_chipset_version_;
+  const uint8_t supported_chipset_version_;
 
   /// The hardware abstraction layer, used to talk to the hardware.
   VS10XXHAL *hal_;
 
   /// Plugins to load for this device.
   std::vector<VS10XXPlugin*> plugins_{};
-
-  /// Perform tests on the SPI communication to see if the bus is working.
-  bool test_communication_();
 
   // Some utility fields and methods to implement a simple state machine. 
   State state_{VS10XX_RESET};

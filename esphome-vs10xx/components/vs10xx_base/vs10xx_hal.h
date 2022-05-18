@@ -7,6 +7,11 @@
 namespace esphome {
 namespace vs10xx_base {
 
+struct Volume {
+  uint8_t left;
+  uint8_t right;
+};
+
 // To communicate using both 200KHz and 4MHz SPI frequencies, two SPIDevice
 // instances are used.
 //
@@ -19,6 +24,8 @@ class VS10XXSlowSPI : public spi::SPIDevice<SPI_BASE, spi::DATA_RATE_200KHZ> {};
 class VS10XXFastSPI : public spi::SPIDevice<SPI_BASE, spi::DATA_RATE_4MHZ> {};
 
 /// This component provides a hardware abstraction layer for VS10XX devices.
+/// It encapsulates the communication and pin logic, and implements various
+/// routines that are generic for the implemented VS10XX chipsets. 
 class VS10XXHAL : public Component {
  public:
   // Methods for initialization.
@@ -36,19 +43,18 @@ class VS10XXHAL : public Component {
   // Methods for controlling the SPI frequency.
   bool go_slow();
   bool go_fast();
-  bool is_fast() const;
 
-  /// Check if the device has failed.
+  /// Check if a failure has been encountered.
   bool has_failed() const;
 
   /// Check if the device is ready for action.
   bool is_ready() const;
 
   /// Check if the device is ready for action within a given timeout.
-  /// When the timeout (default 500ms) is reached after a delay during
-  /// the provided process time (estimated time that the device will take
-  /// to process the last command, default 0), without the device becoming
-  /// ready, then false is returned and the device is registered as failed.
+  /// When the timeout (default 500ms) is reached after an initial process time
+  /// delay (estimated time that the device will take to process the last
+  /// command, default 0ms), without the device becoming ready, then false is
+  /// returned and the device is registered as failed.
   /// Otherwise, true is returned.
   bool wait_for_ready(uint16_t process_time_ms=0, uint16_t timeout_ms=500);
 
@@ -65,16 +71,37 @@ class VS10XXHAL : public Component {
   bool soft_reset();
 
   /// Check if the version of the VS10XX chipset matches the supported version.
-  /// The vs10xx_base::Chipset enum contains the known chipset versions
-  /// that the reported version can be compared against.
-  bool verify_chipset(Chipset supported_version);
+  bool verify_chipset(uint8_t supported_version);
 
-  // SPI interaction methods.
+  /// Perform some communication tests to see if we can talk to the device.
+  bool test_communication();
+
+  /// Turn off the analog output.
+  bool turn_off_output();
+
+  /// Set the output volume of the left and right channel of the analog output.
+  /// The volume goes from 0 (silent) to 30 (full volume). Out of bound values
+  /// will be automatically clamped within these bounds.
+  bool set_volume(uint8_t left, uint8_t right);
+
+  /// Retrieve the output volume of the left and right channel of the analog output.
+  Volume get_volume() const;
+
+  // High level SPI interaction methods.
   bool write_register(uint8_t reg, uint16_t value);
   uint16_t read_register(uint8_t reg) const;
   void begin_command_transaction() const;
   void begin_data_transaction() const;
   void end_transaction() const;
+
+  // Low level SPI interaction methods.
+  // These will switch between the slow and fast SPI instance, based on the
+  // current frequency mode.
+  void enable() const;
+  void disable() const;
+  void write_byte(uint8_t value) const;
+  void write_byte16(uint16_t value) const;
+  uint8_t read_byte() const;
 
  protected:
   /// The tag to use for log messages.
@@ -105,14 +132,6 @@ class VS10XXHAL : public Component {
 
   /// A little utility method that flags the device as failed and returns false.
   bool fail_();
-
-  // Low level methods for communicating to one of the SPI device
-  // instances (slow/fast).
-  void enable_() const;
-  void disable_() const;
-  void write_byte_(uint8_t value) const;
-  void write_byte16_(uint16_t value) const;
-  uint8_t read_byte_() const;
 };
 
 }  // namespace vs10xx_base

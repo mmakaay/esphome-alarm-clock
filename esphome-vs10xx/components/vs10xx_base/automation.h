@@ -12,7 +12,7 @@ namespace vs10xx_base {
   class ACTION_CLASS : /* NOLINT */ \
                        public Action<Ts...>, \
                        public Parented<VS10XXBase> { \
-    void play(Ts... x) override { this->parent_->ACTION_METHOD(); } \
+    void play(Ts... x) override { this->parent_->hal()->ACTION_METHOD(); } \
   };
 
 VS10XX_SIMPLE_ACTION(TurnOffOutputAction, turn_off_output)
@@ -25,8 +25,7 @@ template<typename... Ts> class SetVolumeAction : public Action<Ts...>, public Pa
   void play(Ts... x) override {
     auto left = this->left_.value(x...);
     auto right = this->right_.value(x...);
-    VS10XXVolume volume = { left, right };
-    this->parent_->set_volume(volume);
+    this->parent_->hal()->set_volume(left, right);
   }
 };
 

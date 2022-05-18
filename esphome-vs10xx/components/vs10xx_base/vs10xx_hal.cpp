@@ -1,6 +1,7 @@
-#include "vs10xx_hal.h"
-#include "vs10xx_constants.h"
 #include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
+#include "vs10xx_constants.h"
+#include "vs10xx_hal.h"
 
 namespace esphome {
 namespace vs10xx_base {
@@ -84,6 +85,8 @@ bool VS10XXHAL::soft_reset() {
   // saves a GPIO on the MCU, this prevents using the SPI bus for any other
   // SPI devices, since the device will always be listening for either commands
   // or data.
+  // For now "NEW MODE" feels like the best choice for ESPHome, but if somebody
+  // requires "SHARED MODE", then we can implement a config option for it.
   this->write_register(SCI_MODE, SM_SDINEW | SM_RESET);
 
   // According to the specs, 2ms ought to be enough for the device to become
@@ -95,7 +98,7 @@ bool VS10XXHAL::soft_reset() {
   // Sanity check: see if SCI_MODE is now set to the expected value of SM_DSINEW.
   auto mode = this->read_register(SCI_MODE);
   if (mode != SM_SDINEW) {
-    ESP_LOGE(this->tag_, "SCI_MODE not SM_SDINEW after reset (value is %d)", mode);
+    ESP_LOGE(this->tag_, "SCI_MODE not SM_SDINEW after soft reset (value is %d)", mode);
     return this->fail_();
   }
 
@@ -132,9 +135,7 @@ bool VS10XXHAL::go_fast() {
   }
 }
 
-bool VS10XXHAL::is_fast() const { return this->fast_mode_; }
-
-bool VS10XXHAL::verify_chipset(Chipset supported_version) {
+bool VS10XXHAL::verify_chipset(uint8_t supported_version) {
   // From the datasheet:
   // SCI_STATUS register has SS_VER in bits 4:7
   auto status = this->read_register(SCI_STATUS);
@@ -147,6 +148,88 @@ bool VS10XXHAL::verify_chipset(Chipset supported_version) {
   }
   ESP_LOGD(this->tag_, "Chipset version: %d, verified OK", version);
   return true;
+}
+
+bool VS10XXHAL::test_communication() {
+  // Wait for the device to become ready (DREQ high).
+  if (!this->wait_for_ready()) {
+    return false;
+  }
+
+  // Now test if we can write and read data over the
+  // bus without errors. In fast SPI mode, we can perform more
+  // write operations in the same time.
+  auto step_size = this->fast_mode_ ? 30 : 300;
+  auto cycles = 0;
+  auto failures = 0;
+  for (int value = 0; value < 0xFFFF; value += step_size) {
+    cycles++;
+    this->write_register(SCI_VOL, value);
+
+    // Sanity check: DREQ should be LOW at this point. If not, then the
+    // DREQ pin might not be connected correctly.
+    if (cycles == 1) {
+      if (this->is_ready()) {
+        ESP_LOGE(this->tag_, "DREQ is unexpectedly HIGH after sending command");
+        return this->fail_();
+      }
+      // Worst case, setting the volume could take 2100 clock cycles.
+      // At 12.288Mhz, this is 171ms. After that, DREQ should be HIGH again.
+      delay(200);
+      if (!this->is_ready()) {
+        ESP_LOGE(this->tag_, "DREQ is unexpectedly LOW after processing command");
+        return this->fail_();
+      }
+    }
+
+    auto read1 = this->read_register(SCI_VOL);
+    auto read2 = this->read_register(SCI_VOL);
+    if (value != read1 || value != read2) {
+      failures++;
+      ESP_LOGE(this->tag_, "SPI test failure after %d cycles; wrote %d, read back %d and %d",
+               cycles, value, read1, read2);
+      // Limit the number of reported failures.
+      if (failures == 10) {
+        break;
+      }
+    }
+  }
+  if (failures == 0) {
+    ESP_LOGD(this->tag_, "SPI communication successful during %d write/read cycles", cycles);
+    return true;
+  }
+  return this->fail_();
+}
+
+bool VS10XXHAL::set_volume(uint8_t left, uint8_t right) {
+  left = clamp<uint8_t>(left, 0, 30);
+  right = clamp<uint8_t>(right, 0, 30);
+  ESP_LOGD(this->tag_, "Set output volume: left=%d, right=%d", left, right);
+  if (this->wait_for_ready()) {
+    // Translate 0 - 30 scale into 254 - 0 scale as used by the device.
+    uint16_t left_ = (uint8_t)(254.0f - left * 254.0f/30.0f);
+    uint16_t right_ = (uint8_t)(254.0f - right * 254.0f/30.0f);
+    uint16_t value = (left_ << 8) | right_;
+    return this->write_register(SCI_VOL, value) && this->wait_for_ready();
+  }
+  return false;
+}
+
+Volume VS10XXHAL::get_volume() const {
+  uint16_t value = this->read_register(SCI_VOL);
+  uint8_t left_ = (uint8_t)((value & 0xFF00) >> 8);
+  uint8_t right_ = (uint8_t)(value & 0x00FF);
+  uint8_t left = (int8_t)(30.0f - left_ * 30.0f/254.0f);
+  uint8_t right = (int8_t)(30.0f - right_ * 30.0f/254.0f);
+  return Volume {
+    left: left,
+    right: right
+  };
+}
+
+bool VS10XXHAL::turn_off_output() {
+  ESP_LOGD(this->tag_, "Turn off analog output");
+  return this->write_register(SCI_VOL, 0xFFFF) && this->wait_for_ready();
 }
 
 bool VS10XXHAL::fail_() {
@@ -180,9 +263,9 @@ bool VS10XXHAL::wait_for_ready(uint16_t process_time_ms, uint16_t timeout_ms) {
 bool VS10XXHAL::write_register(uint8_t reg, uint16_t value) {
   if (this->wait_for_ready()) {
     this->begin_command_transaction();
-    this->write_byte_(2); // command: write
-    this->write_byte_(reg);
-    this->write_byte16_(value);
+    this->write_byte(2); // command: write
+    this->write_byte(reg);
+    this->write_byte16(value);
     this->end_transaction();
     ESP_LOGVV(this->tag_, "write_register: 0x%02X: 0x%02X", reg, value);
     return true;
@@ -193,33 +276,33 @@ bool VS10XXHAL::write_register(uint8_t reg, uint16_t value) {
 
 uint16_t VS10XXHAL::read_register(uint8_t reg) const {
   this->begin_command_transaction();
-  this->write_byte_(3); // command: read
-  this->write_byte_(reg);
-  uint16_t value = this->read_byte_() << 8 | this->read_byte_();
+  this->write_byte(3); // command: read
+  this->write_byte(reg);
+  uint16_t value = this->read_byte() << 8 | this->read_byte();
   this->end_transaction();
   ESP_LOGVV(this->tag_, "read_register: 0x%02X: 0x%02X", reg, value);
   return value;
 }
 
 void VS10XXHAL::begin_command_transaction() const {
-  this->enable_();
+  this->enable();
   this->xdcs_pin_->digital_write(true);
   this->xcs_pin_->digital_write(false);
 }
 
 void VS10XXHAL::begin_data_transaction() const {
-  this->enable_();
+  this->enable();
   this->xcs_pin_->digital_write(true);
   this->xdcs_pin_->digital_write(false);
 }
 
 void VS10XXHAL::end_transaction() const {
-  this->disable_();
+  this->disable();
   this->xdcs_pin_->digital_write(true);
   this->xcs_pin_->digital_write(true);
 }
 
-void VS10XXHAL::enable_() const {
+void VS10XXHAL::enable() const {
   if (this->fast_mode_) {
     this->fast_spi_->enable();
   } else {
@@ -227,7 +310,7 @@ void VS10XXHAL::enable_() const {
   }
 }
 
-void VS10XXHAL::disable_() const {
+void VS10XXHAL::disable() const {
   if (this->fast_mode_) {
     this->fast_spi_->disable();
   } else {
@@ -235,7 +318,7 @@ void VS10XXHAL::disable_() const {
   }
 }
 
-void VS10XXHAL::write_byte_(uint8_t value) const {
+void VS10XXHAL::write_byte(uint8_t value) const {
   if (this->fast_mode_) {
     this->fast_spi_->write_byte(value);
   } else {
@@ -243,7 +326,7 @@ void VS10XXHAL::write_byte_(uint8_t value) const {
   }
 }
 
-void VS10XXHAL::write_byte16_(uint16_t value) const {
+void VS10XXHAL::write_byte16(uint16_t value) const {
   if (this->fast_mode_) {
     this->fast_spi_->write_byte16(value);
   } else {
@@ -251,7 +334,7 @@ void VS10XXHAL::write_byte16_(uint16_t value) const {
   }
 }
 
-uint8_t VS10XXHAL::read_byte_() const {
+uint8_t VS10XXHAL::read_byte() const {
   if (this->fast_mode_) {
     return this->fast_spi_->read_byte();
   } else {

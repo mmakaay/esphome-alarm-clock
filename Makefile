@@ -11,3 +11,6 @@ logs:
 
 copy:
 	cp .esphome/build/alarm-clock/.pioenvs/alarm-clock/firmware.* /mnt/c/Users/mauri/Downloads/
+
+clean:
+	esphome clean example.yaml

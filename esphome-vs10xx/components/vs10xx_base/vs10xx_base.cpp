@@ -25,13 +25,13 @@ void VS10XXBase::dump_config() {
 void VS10XXBase::loop() {
   // When the HAL has ran into an issue, then go into failure mode.
   if (this->state_ != VS10XX_FAILED && this->hal_->has_failed()) {
-    this->to_state_(VS10XX_REPORT_FAILED); 
+    this->state_ = VS10XX_REPORT_FAILED; 
   }
 
   switch (this->state_) {
     case VS10XX_RESET:
       if (this->hal_->reset()) {
-        this->to_state_(VS10XX_INIT_PHASE_1);
+        this->state_ = VS10XX_INIT_PHASE_1;
       }
       break;
     case VS10XX_INIT_PHASE_1:
@@ -39,7 +39,7 @@ void VS10XXBase::loop() {
           this->hal_->test_communication() &&
           this->hal_->verify_chipset(this->supported_chipset_version_) &&
           this->hal_->soft_reset()) {
-        this->to_state_(VS10XX_INIT_PHASE_2); 
+        this->state_ = VS10XX_INIT_PHASE_2;
       }
       break;
     case VS10XX_INIT_PHASE_2:
@@ -58,12 +58,12 @@ void VS10XXBase::loop() {
       this->hal_->write_register(SCI_AUDATA, 44101);
 
       // All is okay, the device can be used.
-      this->to_state_(VS10XX_READY); 
+      this->state_ = VS10XX_READY; 
       ESP_LOGI(this->tag_, "Device initialized successfully");
       break;
     case VS10XX_REPORT_FAILED:
       ESP_LOGE(this->tag_, "Device initialization failed");
-      this->to_state_(VS10XX_FAILED);
+      this->state_ = VS10XX_FAILED;
       break;
     case VS10XX_READY:
       // NOOP
@@ -72,16 +72,6 @@ void VS10XXBase::loop() {
       // NOOP
       break;
   }
-}
-
-void VS10XXBase::to_state_(State state) {
-  this->state_ = state;
-  this->state_timer_ = millis();
-}
-
-bool VS10XXBase::state_ms_passed_(uint32_t nr_of_ms) const {
-  auto time_passed = millis() - this->state_timer_;
-  return time_passed >= nr_of_ms;
 }
 
 }  // namespace vs10xx_base

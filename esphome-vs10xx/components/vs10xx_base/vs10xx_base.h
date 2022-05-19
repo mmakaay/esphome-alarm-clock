@@ -44,17 +44,14 @@ class VS10XXBase : public Component {
   /// The VS10XX chipset that is supported by the implementation.
   const uint8_t supported_chipset_version_;
 
+  /// The state of the device.
+  State state_{VS10XX_RESET};
+
   /// The hardware abstraction layer, used to talk to the hardware.
   VS10XXHAL *hal_;
 
   /// Plugins to load for this device.
   std::vector<VS10XXPlugin*> plugins_{};
-
-  // Some utility fields and methods to implement a simple state machine. 
-  State state_{VS10XX_RESET};
-  uint32_t state_timer_; 
-  void to_state_(State state);
-  bool state_ms_passed_(uint32_t nr_of_ms) const;
 };
 
 }  // namespace vs10xx

@@ -82,7 +82,7 @@ class VS10XXHAL : public Component {
   /// Set the output volume of the left and right channel of the analog output.
   /// The volume goes from 0 (silent) to 30 (full volume). Out of bound values
   /// will be automatically clamped within these bounds.
-  bool set_volume(uint8_t left, uint8_t right);
+  bool set_volume(Volume volume);
 
   /// Retrieve the output volume of the left and right channel of the analog output.
   Volume get_volume() const;

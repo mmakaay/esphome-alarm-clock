@@ -25,7 +25,8 @@ template<typename... Ts> class SetVolumeAction : public Action<Ts...>, public Pa
   void play(Ts... x) override {
     auto left = this->left_.value(x...);
     auto right = this->right_.value(x...);
-    this->parent_->hal()->set_volume(left, right);
+    auto volume = Volume { left, right };
+    this->parent_->hal()->set_volume(volume);
   }
 };
 

@@ -201,9 +201,9 @@ bool VS10XXHAL::test_communication() {
   return this->fail_();
 }
 
-bool VS10XXHAL::set_volume(uint8_t left, uint8_t right) {
-  left = clamp<uint8_t>(left, 0, 30);
-  right = clamp<uint8_t>(right, 0, 30);
+bool VS10XXHAL::set_volume(Volume volume) {
+  auto left = clamp<uint8_t>(volume.left, 0, 30);
+  auto right = clamp<uint8_t>(volume.right, 0, 30);
   ESP_LOGD(this->tag_, "Set output volume: left=%d, right=%d", left, right);
   if (this->wait_for_ready()) {
     // Translate 0 - 30 scale into 254 - 0 scale as used by the device.

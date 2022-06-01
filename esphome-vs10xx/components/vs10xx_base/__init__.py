@@ -3,6 +3,7 @@ import esphome.config_validation as cv
 from esphome import automation
 from esphome import pins
 from esphome.components import spi
+from esphome.components import blob
 from esphome.const import CONF_ID, CONF_RESET_PIN
 
 CONF_HAL_ID = "hal_id"
@@ -15,6 +16,7 @@ CONF_PLUGINS = "plugins"
 CONF_VOLUME = "volume"
 CONF_LEFT = "left"
 CONF_RIGHT = "right"
+CONF_BLOB_ID = "blob_id"
 
 CODEOWNERS = ["@mmakaay"]
 DEPENDENCIES = ["spi"]
@@ -29,8 +31,15 @@ VS10XXHAL = vs10xx_base_ns.class_("VS10XXHAL", cg.Component)
 VS10XXPlugin = vs10xx_base_ns.class_("VS10XXPlugin")
 
 # Actions
-SetVolumeAction = vs10xx_base_ns.class_("SetVolumeAction", automation.Action)
-TurnOffOutputAction = vs10xx_base_ns.class_("TurnOffOutputAction", automation.Action)
+SetVolumeAction = vs10xx_base_ns.class_(
+    "SetVolumeAction", automation.Action, cg.Parented.template(VS10XXBase)
+)
+PlayAction = vs10xx_base_ns.class_(
+    "PlayAction", automation.Action, cg.Parented.template(VS10XXBase)
+)
+TurnOffOutputAction = vs10xx_base_ns.class_(
+    "TurnOffOutputAction", automation.Action, cg.Parented.template(VS10XXBase)
+)
 
 
 def vs10xx_device_schema(component_class, plugins = {}):
@@ -87,6 +96,25 @@ async def register_vs10xx_component(config, plugins):
             plugin_id = cv.declare_id(plugin_class)(f"plugin_{name}")
             plugin = cg.new_Pvariable(plugin_id)
             cg.add(var.add_plugin(plugin))
+
+
+@automation.register_action(
+    "vs10xx.play",
+    PlayAction,
+    cv.maybe_simple_value(
+        {
+            cv.GenerateID(): cv.use_id(VS10XXBase),
+            cv.GenerateID(CONF_BLOB_ID): cv.use_id(blob.Blob),
+        },
+        key=CONF_BLOB_ID,
+    ),
+)
+async def vs10xx_play_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_ID])
+    blob_var = await cg.get_variable(config[CONF_BLOB_ID])
+    cg.add(var.set_blob(blob_var))
+    return var
 
 
 @automation.register_action(

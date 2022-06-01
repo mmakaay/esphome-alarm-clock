@@ -6,6 +6,10 @@ substitutions:
   name: "alarm-clock"
   friendly_name: "Alarm Clock"
 
+blob:
+  - id: mp3_nr1
+    file: "./audio/abracadabra.mp3"
+
 esphome:
   name: ${name}
   on_boot:
@@ -557,7 +561,11 @@ vs1003:
   plugins:
     - wavfix
     - dacmono
- 
+
+#media_player:
+#  platform: vs10xx
+#  component_id: audio_decoder
+  
 apds9960:
   update_interval: 500ms
   i2c_id: gesture_sensor_bus
@@ -701,6 +709,8 @@ binary_sensor:
         - vs10xx.set_volume: 0
         - vs10xx.set_volume:
             volume: 15
+        - vs10xx.play: 
+            blob_id: mp3_nr1
         - vs10xx.set_volume: 0
         - vs10xx.turn_off_output:
     on_release:

@@ -46,12 +46,12 @@ bool VS10XXHAL::reset() {
   if (this->has_reset()) {
     ESP_LOGD(this->tag_, "Hard resetting the device");
 
-    // By driving the XRESET-signal low, the device is reset.
+    // By driving the XRESET-signal low, the device will reset.
     this->reset_pin_->digital_write(false);
     delay(1); // 1 ms delay is enough according to the specs
     this->reset_pin_->digital_write(true);
 
-    // After initialization, the DREQ ought to be pulled HIGH.
+    // After initialization, the DREQ pin ought to be pulled HIGH.
     // The datasheet specifies max 50000 XTALI cycles for boot initialization.
     // At the default XTALI of 12.288 MHz, this takes about 4ms.
     // Therefore, 5ms ought to be enough for the device to become ready.

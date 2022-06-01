@@ -2,6 +2,7 @@
 
 #include "esphome/core/component.h"
 #include "esphome/components/spi/spi.h"
+#include "esphome/components/blob/blob.h"
 #include "vs10xx_constants.h"
 #include "vs10xx_hal.h"
 #include "vs10xx_plugin.h"
@@ -11,21 +12,30 @@ namespace esphome {
 namespace vs10xx_base {
 
 /// States used by the VS10XXBase code to implement its state machine. 
-enum State {
-  VS10XX_RESET,
-  VS10XX_INIT_PHASE_1,
-  VS10XX_INIT_PHASE_2,
-  VS10XX_REPORT_FAILED,
-  VS10XX_FAILED,
-  VS10XX_READY
+enum DeviceState {
+  DEVICE_RESET,
+  DEVICE_INIT_PHASE_1,
+  DEVICE_INIT_PHASE_2,
+  DEVICE_REPORT_FAILED,
+  DEVICE_FAILED,
+  DEVICE_READY,
+};
+
+enum MediaState {
+  MEDIA_STOPPED,
+  MEDIA_STARTING,
+  MEDIA_PLAYING,
+  MEDIA_STOPPING,
 };
 
 class VS10XXBase : public Component {
  public:
+  /// The hardware abstraction layer, used to talk to the hardware.
+  VS10XXHAL *hal;
+
   // Object construction and configuration.
   explicit VS10XXBase(const char* name, const char* tag, const uint8_t supported_chipset);
-  void set_hal(VS10XXHAL *hal) { this->hal_ = hal; }
-  VS10XXHAL* hal() { return this->hal_; }
+  void set_hal(VS10XXHAL *hal) { this->hal = hal; }
   void add_plugin(VS10XXPlugin *plugin) { this->plugins_.push_back(plugin); }
 
   // These must be called by derived classes from their respective methods
@@ -33,6 +43,12 @@ class VS10XXBase : public Component {
   void setup() override;
   void dump_config() override;
   void loop() override;
+
+  /// Play some audio.
+  void play(blob::Blob *blob);
+
+  /// Stop playing audio.
+  void stop();
 
  protected:
   /// The name of this component.
@@ -45,13 +61,16 @@ class VS10XXBase : public Component {
   const uint8_t supported_chipset_version_;
 
   /// The state of the device.
-  State state_{VS10XX_RESET};
+  DeviceState device_state_{DEVICE_RESET};
 
-  /// The hardware abstraction layer, used to talk to the hardware.
-  VS10XXHAL *hal_;
+  /// The media operation state.
+  MediaState media_state_{MEDIA_STOPPED};
 
   /// Plugins to load for this device.
   std::vector<VS10XXPlugin*> plugins_{};
+
+  /// The Blob object from which audio must be played.
+  blob::Blob *audio_{nullptr};
 };
 
 }  // namespace vs10xx

@@ -1,4 +1,6 @@
-all: compile upload
+all: compile
+
+it: compile upload
 
 compile:
 	esphome compile example.yaml

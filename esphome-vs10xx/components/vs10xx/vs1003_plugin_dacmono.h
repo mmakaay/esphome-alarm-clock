@@ -1,11 +1,9 @@
 #pragma once
 
-#include "esphome/components/vs10xx_base/vs10xx_plugin.h"
+#include "esphome/components/vs10xx/vs10xx_plugin.h"
 
 namespace esphome {
-namespace vs1003 {
-
-using namespace vs10xx_base;
+namespace vs10xx {
 
 /// When you need to play stereo files but only use one of the
 /// analog outputs, this is the patch for you. The VS1003 Mono
@@ -22,7 +20,7 @@ using namespace vs10xx_base;
 /// See:
 /// - https://www.vlsi.fi/en/support/software/vs10xxpatches.html
 /// - https://www.vlsi.fi/fileadmin/software/VS10XX/dacpatch.pdf
-class VS1003PluginDacMono: public VS10XXPlugin {
+class PluginVS1003DacMono: public VS10XXPlugin {
   using VS10XXPlugin::VS10XXPlugin;
 
   const char* description() const override {
@@ -47,6 +45,7 @@ class VS1003PluginDacMono: public VS10XXPlugin {
   }
 };
 
-}  // namespace vs1003
-}  // namespace esphome
+}  // namespace vs10xx
+}
+// namespace esphome
 

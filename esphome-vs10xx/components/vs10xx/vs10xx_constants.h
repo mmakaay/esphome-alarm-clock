@@ -1,7 +1,7 @@
 #pragma once
 
 namespace esphome {
-namespace vs10xx_base {
+namespace vs10xx {
 
 /// The size of the data buffer on the device in bytes. When streaming audio
 /// to the device, we must not send more than this in one go.
@@ -27,7 +27,8 @@ const uint8_t SCI_NUM_REGISTERS = 15;
 const uint16_t SM_DIFF = 1<<0;
 const uint16_t SM_LAYER12 = 1<<1;
 const uint16_t SM_RESET = 1<<2;
-const uint16_t SM_CANCEL = 1<<3; // SM_OUTOFWAV before VS1053b
+const uint16_t SM_OUTOFWAV = 1<<3;  // up to VS1003
+const uint16_t SM_CANCEL = 1<<3;  // from VS1053 on
 const uint16_t SM_EARSPEAKER_LO = 1<<4;
 const uint16_t SM_TESTS = 1<<5;
 const uint16_t SM_STREAM = 1<<6;

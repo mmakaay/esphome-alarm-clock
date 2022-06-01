@@ -1,11 +1,9 @@
 #pragma once
 
-#include "esphome/components/vs10xx_base/vs10xx_plugin.h"
+#include "esphome/components/vs10xx/vs10xx_plugin.h"
 
 namespace esphome {
-namespace vs1003 {
-
-using namespace vs10xx_base;
+namespace vs10xx {
 
 /// VS1002d and VS1003 support MPEG 2.5 extension, but some stereo files
 /// with an 8 kHz sample rate have playback problems. The problems are
@@ -71,6 +69,6 @@ class VS1003Plugin8kHzMp3Fix: public VS10XXPlugin {
   }
 };
 
-}  // namespace vs1003
+}  // namespace vs10xx
 }  // namespace esphome
 

@@ -1,3 +1,5 @@
+Validate plugins from schema.
+
 Make Volume use a 0.0 - 1.0 float value and the mapper util to translate it to
 a device volume.
 

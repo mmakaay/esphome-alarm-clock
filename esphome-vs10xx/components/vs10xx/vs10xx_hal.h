@@ -5,7 +5,7 @@
 #include "vs10xx_constants.h"
 
 namespace esphome {
-namespace vs10xx_base {
+namespace vs10xx {
 
 struct Volume {
   uint8_t left;
@@ -23,14 +23,33 @@ struct Volume {
 class VS10XXSlowSPI : public spi::SPIDevice<SPI_BASE, spi::DATA_RATE_200KHZ> {};
 class VS10XXFastSPI : public spi::SPIDevice<SPI_BASE, spi::DATA_RATE_4MHZ> {};
 
+class VS10XXHALChipset {
+ public:
+  explicit VS10XXHALChipset() = default;
+  virtual uint8_t get_chipset_version() = 0;
+};
+
+class VS1003Chipset : public VS10XXHALChipset {
+ public:
+  uint8_t get_chipset_version() override {
+    return CHIPSET_VS1003;
+  }
+};
+
+class VS1053Chipset : public VS10XXHALChipset {
+ public:
+  uint8_t get_chipset_version() override {
+    return CHIPSET_VS1053;
+  }
+};
+
 /// This component provides a hardware abstraction layer for VS10XX devices.
 /// It encapsulates the communication and pin logic, and implements various
-/// routines that are generic for the implemented VS10XX chipsets. 
+/// routines that can be performed by the implemented VS10XX chipsets. 
 class VS10XXHAL : public Component {
  public:
   // Methods for initialization.
-  explicit VS10XXHAL() = default;
-  void set_tag(const char* tag) { this->tag_ = tag; }
+  explicit VS10XXHAL(VS10XXHALChipset *chipset) : chipset_(chipset) {}
   void set_slow_spi(VS10XXSlowSPI *spi) { this->slow_spi_ = spi; }
   void set_fast_spi(VS10XXFastSPI *spi) { this->fast_spi_ = spi; }
   void set_xdcs_pin(GPIOPin *xdcs_pin) { this->xdcs_pin_ = xdcs_pin; }
@@ -71,7 +90,7 @@ class VS10XXHAL : public Component {
   bool soft_reset();
 
   /// Check if the version of the VS10XX chipset matches the supported version.
-  bool verify_chipset(uint8_t supported_version);
+  bool verify_chipset();
 
   /// Perform some communication tests to see if we can talk to the device.
   bool test_communication();
@@ -104,12 +123,12 @@ class VS10XXHAL : public Component {
   uint8_t read_byte() const;
 
  protected:
-  /// The tag to use for log messages.
-  const char* tag_;
-
   VS10XXSlowSPI *slow_spi_;
   VS10XXFastSPI *fast_spi_;
   bool fast_mode_{false};
+
+  /// This object implements the chipset-specific code.
+  VS10XXHALChipset *chipset_;
 
   /// The XCS pin can be pulled low to lock the SPI bus for a command.
   GPIOPin *xcs_pin_;
@@ -134,5 +153,5 @@ class VS10XXHAL : public Component {
   bool fail_();
 };
 
-}  // namespace vs10xx_base
+}  // namespace vs10xx
 }  // namespace esphome

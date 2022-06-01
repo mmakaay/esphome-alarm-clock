@@ -552,8 +552,9 @@ spi:
   mosi_pin: GPIO23
   miso_pin: GPIO19
 
-vs1003:
+vs10xx:
   id: audio_decoder
+  type: vs1003
   reset_pin: GPIO12
   xcs_pin: GPIO32
   xdcs_pin: GPIO33

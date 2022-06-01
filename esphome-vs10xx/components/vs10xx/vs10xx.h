@@ -9,9 +9,9 @@
 #include <vector>
 
 namespace esphome {
-namespace vs10xx_base {
+namespace vs10xx {
 
-/// States used by the VS10XXBase code to implement its state machine. 
+/// States used by the VS10XX code to implement its state machine. 
 enum DeviceState {
   DEVICE_RESET,
   DEVICE_INIT_PHASE_1,
@@ -28,13 +28,13 @@ enum MediaState {
   MEDIA_STOPPING,
 };
 
-class VS10XXBase : public Component {
+class VS10XX : public Component {
  public:
   /// The hardware abstraction layer, used to talk to the hardware.
   VS10XXHAL *hal;
 
   // Object construction and configuration.
-  explicit VS10XXBase(const char* name, const char* tag, const uint8_t supported_chipset);
+  explicit VS10XX();
   void set_hal(VS10XXHAL *hal) { this->hal = hal; }
   void add_plugin(VS10XXPlugin *plugin) { this->plugins_.push_back(plugin); }
 
@@ -53,9 +53,6 @@ class VS10XXBase : public Component {
  protected:
   /// The name of this component.
   const char* name_;
-
-  /// The tag to use for log messages.
-  const char* tag_;
 
   /// The VS10XX chipset that is supported by the implementation.
   const uint8_t supported_chipset_version_;

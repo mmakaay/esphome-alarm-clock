@@ -1,11 +1,9 @@
 #pragma once
 
-#include "esphome/components/vs10xx_base/vs10xx_plugin.h"
+#include "esphome/components/vs10xx/vs10xx_plugin.h"
 
 namespace esphome {
-namespace vs1003 {
-
-using namespace vs10xx_base;
+namespace vs10xx {
 
 /// VS1003B supports WMA v2-v9: 5kbps - 320kbps files. Because of the
 /// file-format nature of WMA and data-stream nature of VS1003B, random-access
@@ -25,7 +23,7 @@ using namespace vs10xx_base;
 /// See:
 /// - https://www.vlsi.fi/en/support/software/vs10xxpatches.html
 /// - https://www.vlsi.fi/fileadmin/software/VS10XX/wmawebcast.pdf
-class VS1003WMAWebcastRewind: public VS10XXPlugin {
+class PluginVS1003WMAWebcastRewind: public VS10XXPlugin {
   using VS10XXPlugin::VS10XXPlugin;
 
   const char* description() const override {
@@ -232,6 +230,6 @@ class VS1003WMAWebcastRewind: public VS10XXPlugin {
   }
 };
 
-}  // namespace vs1003
+}  // namespace vs10xx
 }  // namespace esphome
 

@@ -1,11 +1,9 @@
 #pragma once
 
-#include "esphome/components/vs10xx_base/vs10xx_plugin.h"
+#include "esphome/components/vs10xx/vs10xx_plugin.h"
 
 namespace esphome {
-namespace vs1003 {
-
-using namespace vs10xx_base;
+namespace vs10xx {
 
 /// The old WAV (RIFF) parser in vs1011e and vs1003b is not very intelligent,
 /// it expects a wav file to have the chunks in a specific order. Some files
@@ -32,7 +30,7 @@ using namespace vs10xx_base;
 /// See:
 /// - https://www.vlsi.fi/en/support/software/vs10xxpatches.html
 /// - https://www.vlsi.fi/fileadmin/software/VS10XX/wavfix.pdf
-class VS1003PluginWavFix: public VS10XXPlugin {
+class PluginVS1003WavFix: public VS10XXPlugin {
   using VS10XXPlugin::VS10XXPlugin;
 
   const char* description() const override {
@@ -57,6 +55,6 @@ class VS1003PluginWavFix: public VS10XXPlugin {
   }
 };
 
-}  // namespace vs1003
+}  // namespace vs10xx
 }  // namespace esphome
 

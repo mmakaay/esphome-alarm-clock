@@ -3,22 +3,22 @@
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/components/blob/blob.h"
-#include "vs10xx_base.h"
+#include "vs10xx.h"
 
 namespace esphome {
-namespace vs10xx_base {
+namespace vs10xx {
 
 #define VS10XX_SIMPLE_ACTION(ACTION_CLASS, ACTION_METHOD) \
   template<typename... Ts> \
   class ACTION_CLASS : /* NOLINT */ \
                        public Action<Ts...>, \
-                       public Parented<VS10XXBase> { \
+                       public Parented<VS10XX> { \
     void play(Ts... x) override { this->parent_->hal->ACTION_METHOD(); } \
   };
 
 VS10XX_SIMPLE_ACTION(TurnOffOutputAction, turn_off_output)
 
-template<typename... Ts> class SetVolumeAction : public Action<Ts...>, public Parented<VS10XXBase> {
+template<typename... Ts> class SetVolumeAction : public Action<Ts...>, public Parented<VS10XX> {
  public:
   TEMPLATABLE_VALUE(uint8_t, left)
   TEMPLATABLE_VALUE(uint8_t, right)
@@ -31,7 +31,7 @@ template<typename... Ts> class SetVolumeAction : public Action<Ts...>, public Pa
   }
 };
 
-template<typename... Ts> class PlayAction : public Action<Ts...>, public Parented<VS10XXBase> {
+template<typename... Ts> class PlayAction : public Action<Ts...>, public Parented<VS10XX> {
  public:
   TEMPLATABLE_VALUE(blob::Blob*, blob)
 
@@ -41,5 +41,5 @@ template<typename... Ts> class PlayAction : public Action<Ts...>, public Parente
   }
 };
 
-}  // namespace vs10xx_base
+}  // namespace vs10xx
 }  // namespace esphome

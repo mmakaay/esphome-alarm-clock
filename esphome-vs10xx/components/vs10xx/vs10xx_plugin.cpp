@@ -1,7 +1,7 @@
 #include "vs10xx_plugin.h"
 
 namespace esphome {
-namespace vs10xx_base {
+namespace vs10xx {
 
 // Implementation based on example code provided by plugin manuals, e.g.
 // https://www.vlsi.fi/fileadmin/software/VS10XX/dacpatch.pdf
@@ -39,5 +39,5 @@ bool VS10XXPlugin::load(VS10XXHAL *hal) {
   return hal->wait_for_ready();
 }
 
-}  // namespace vs10xx_base
+}  // namespace vs10xx
 }  // namespace esphome

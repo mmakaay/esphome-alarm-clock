@@ -5,7 +5,7 @@
 #include <vector>
 
 namespace esphome {
-namespace vs10xx_base {
+namespace vs10xx {
 
 /// Used for building classes that can apply patches or plugin code
 /// to a device.

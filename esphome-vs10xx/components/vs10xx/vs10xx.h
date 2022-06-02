@@ -26,6 +26,7 @@ enum MediaState {
   MEDIA_STARTING,
   MEDIA_PLAYING,
   MEDIA_STOPPING,
+  MEDIA_SWITCHING,
 };
 
 class VS10XX : public Component {

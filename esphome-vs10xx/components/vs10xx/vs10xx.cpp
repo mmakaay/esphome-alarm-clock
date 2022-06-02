@@ -78,19 +78,17 @@ void VS10XX::loop() {
 void VS10XX::play(blob::Blob *blob) {
   if (this->device_state_ != DEVICE_READY) {
     ESP_LOGE(TAG, "play(): The device is not ready for use");
-    return;
+  } else if (this->media_state_ == MEDIA_STOPPED) {
+    ESP_LOGD(TAG, "play(): start media");
+    this->media_state_ = MEDIA_STARTING;
+    this->audio_ = blob;
+  } else if (this->media_state_ == MEDIA_PLAYING) {
+    ESP_LOGD(TAG, "play(): Already playing, so need to stop first");
+    this->media_state_ = MEDIA_SWITCHING;
+    this->audio_ = blob;
+  } else {
+    ESP_LOGE(TAG, "play(): Current media state does not allow play command");
   }
-  //if (this->media_state_ == DEVICE_PLAYING) {
-  //  ESP_LOGD(TAG, "play(): Already playing, so need to stop first");
-  //  this->media_state_ = MEDIA_STOPPING
-  //}
-  //if (this->device_state_ != DEVICE_READY) {
-  //  ESP_LOGE(TAG, "play(): The device is not ready for playing audio");
-  //  return;
-  //}
-  //ESP_LOGD(TAG, "play(): Start playing audio");
-  //this->device_state_ = DEVICE_PLAYING;
-  //this->audio_ = blob;
 }
 
 void VS10XX::stop() {

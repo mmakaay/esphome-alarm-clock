@@ -23,6 +23,8 @@ struct Volume {
 class VS10XXSlowSPI : public spi::SPIDevice<SPI_BASE, spi::DATA_RATE_200KHZ> {};
 class VS10XXFastSPI : public spi::SPIDevice<SPI_BASE, spi::DATA_RATE_4MHZ> {};
 
+/// This class describes the interface that must be implemented for
+/// a HAL chipset. This interface contains all chipset-specific HAL code.
 class VS10XXHALChipset {
  public:
   explicit VS10XXHALChipset() = default;

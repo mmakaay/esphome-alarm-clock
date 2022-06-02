@@ -41,15 +41,5 @@ const uint16_t SM_ADPCM = 1<<12;
 const uint16_t SM_ADCPM_HP = 1<<13;
 const uint16_t SM_LINE_IN = 1<<14;
 
-// Known chipset versions.
-const uint8_t CHIPSET_VS1001 = 0;
-const uint8_t CHIPSET_VS1011 = 1;
-const uint8_t CHIPSET_VS1002 = 2;
-const uint8_t CHIPSET_VS1003 = 3;
-const uint8_t CHIPSET_VS1053 = 4;
-const uint8_t CHIPSET_VS1033 = 5;
-const uint8_t CHIPSET_VS1103 = 6;
-const uint8_t CHIPSET_VS1063 = 7;
-
 }  // namespace vs10xx
 }  // namespace esphome

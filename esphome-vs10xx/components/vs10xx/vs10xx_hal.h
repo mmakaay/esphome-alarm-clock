@@ -28,21 +28,12 @@ class VS10XXFastSPI : public spi::SPIDevice<SPI_BASE, spi::DATA_RATE_4MHZ> {};
 class VS10XXHALChipset {
  public:
   explicit VS10XXHALChipset() = default;
+
+  /// Get the version of the chipset that is supported by the chipset class. 
   virtual uint8_t get_chipset_version() = 0;
-};
 
-class VS1003Chipset : public VS10XXHALChipset {
- public:
-  uint8_t get_chipset_version() override {
-    return CHIPSET_VS1003;
-  }
-};
-
-class VS1053Chipset : public VS10XXHALChipset {
- public:
-  uint8_t get_chipset_version() override {
-    return CHIPSET_VS1053;
-  }
+  /// Get the SCI_CLOCKF value to use for fast (>4Mhz) communication.
+  virtual uint16_t get_fast_clockf() = 0;
 };
 
 /// This component provides a hardware abstraction layer for VS10XX devices.

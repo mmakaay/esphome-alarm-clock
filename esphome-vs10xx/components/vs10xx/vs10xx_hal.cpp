@@ -1,4 +1,3 @@
-#include "esphome/core/defines.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include "vs10xx_constants.h"
@@ -126,11 +125,7 @@ bool VS10XXHAL::go_fast() {
 
   // Set device clock multiplier to the recommended value for typical use.
   // After this, we can safely use a SPI speed of 4MHz.
-  // Note:
-  // For VS1003 and VS1053, I see 0x9800 in both data sheets. They mean different things
-  // for each chipset, but since the recommended value is the same, I haven't moved
-  // this into chipset-specific code for now.
-  if (this->write_register(SCI_CLOCKF, 0x9800)) {
+  if (this->write_register(SCI_CLOCKF, chipset_->get_fast_clockf)) {
     this->fast_mode_ = true;
     return true;
   } else {

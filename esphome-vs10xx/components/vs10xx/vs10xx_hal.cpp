@@ -125,7 +125,7 @@ bool VS10XXHAL::go_fast() {
 
   // Set device clock multiplier to the recommended value for typical use.
   // After this, we can safely use a SPI speed of 4MHz.
-  if (this->write_register(SCI_CLOCKF, chipset_->get_fast_clockf)) {
+  if (this->write_register(SCI_CLOCKF, chipset_->get_fast_clockf())) {
     this->fast_mode_ = true;
     return true;
   } else {

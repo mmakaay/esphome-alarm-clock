@@ -165,30 +165,30 @@ async def vs10xx_play_to_code(config, action_id, template_arg, args):
         cv.maybe_simple_value(
             {
                 cv.GenerateID(): cv.use_id(VS10XX),
-                cv.Required(CONF_VOLUME): cv.templatable(cv.int_),
+                cv.Required(CONF_VOLUME): cv.templatable(cv.percentage),
             },
             key=CONF_VOLUME,
         ),
         cv.Schema(
             {
                 cv.GenerateID(): cv.use_id(VS10XX),
-                cv.Optional(CONF_LEFT): cv.templatable(cv.uint8_t),
-                cv.Optional(CONF_RIGHT): cv.templatable(cv.uint8_t),
+                cv.Optional(CONF_LEFT): cv.templatable(cv.percentage),
+                cv.Optional(CONF_RIGHT): cv.templatable(cv.percentage),
             }
-        )
+        ),
     )
 ) 
 async def vs10xx_set_volume_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])
     if CONF_VOLUME in config:
-        vol = await cg.templatable(config[CONF_VOLUME], args, cg.uint8)
+        vol = await cg.templatable(config[CONF_VOLUME], args, float)
         cg.add(var.set_left(vol))
         cg.add(var.set_right(vol))
     else:
-        left_vol = await cg.templatable(config[CONF_LEFT], args, cg.uint8)
+        left_vol = await cg.templatable(config[CONF_LEFT], args, float)
         cg.add(var.set_left(left_vol))
-        right_vol = await cg.templatable(config[CONF_RIGHT], args, cg.uint8)
+        right_vol = await cg.templatable(config[CONF_RIGHT], args, float)
         cg.add(var.set_right(right_vol))
     return var
 

@@ -1,8 +1,3 @@
-Validate plugins from schema.
-
-Make Volume use a 0.0 - 1.0 float value and the mapper util to translate it to
-a device volume.
-
 SM_DIFF left channel inverted option
 
 SM_PDOWN power down option
@@ -11,3 +6,7 @@ SCI_BASS for treble/bass control
 
 SCI_DECODE_TIME, SCI_AUDATA sensors
 SCI_HDAT0 and SCI_HDAT1 text sensor? (type of audio + sample & bit rate)
+
+Hard reset device when it failed on a pre-defined or configured interval?
+This could help with some auto-recovery. I haven't seen the practical need
+for this in testing yet.

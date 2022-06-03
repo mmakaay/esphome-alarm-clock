@@ -20,14 +20,13 @@ VS10XX_SIMPLE_ACTION(TurnOffOutputAction, turn_off_output)
 
 template<typename... Ts> class SetVolumeAction : public Action<Ts...>, public Parented<VS10XX> {
  public:
-  TEMPLATABLE_VALUE(uint8_t, left)
-  TEMPLATABLE_VALUE(uint8_t, right)
+  TEMPLATABLE_VALUE(float, left)
+  TEMPLATABLE_VALUE(float, right)
 
   void play(Ts... x) override {
     auto left = this->left_.value(x...);
     auto right = this->right_.value(x...);
-    auto volume = Volume { left, right };
-    this->parent_->hal->set_volume(volume);
+    this->parent_->hal->set_volume(left, right);
   }
 };
 

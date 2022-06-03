@@ -200,30 +200,18 @@ bool VS10XXHAL::test_communication() {
   return this->fail_();
 }
 
-bool VS10XXHAL::set_volume(Volume volume) {
-  auto left = clamp<uint8_t>(volume.left, 0, 30);
-  auto right = clamp<uint8_t>(volume.right, 0, 30);
-  ESP_LOGD(TAG, "Set output volume: left=%d, right=%d", left, right);
+bool VS10XXHAL::set_volume(float left, float right) {
+  auto left_c = clamp(left, 0.0f, 1.0f);
+  auto right_c = clamp(right, 0.0f, 1.0f);
+  ESP_LOGD(TAG, "Set output volume: left=%0.2f, right=%0.2f", left_c, right_c);
   if (this->wait_for_ready()) {
-    // Translate 0 - 30 scale into 254 - 0 scale as used by the device.
-    uint16_t left_ = (uint8_t)(254.0f - left * 254.0f/30.0f);
-    uint16_t right_ = (uint8_t)(254.0f - right * 254.0f/30.0f);
-    uint16_t value = (left_ << 8) | right_;
+    // Translate 0 - 1 scale into 254 - 0 scale as used by the device.
+    uint16_t left_r = remap<uint16_t, float>(left_c, 0.0f, 1.0f, 254, 0);
+    uint16_t right_r = remap<uint16_t, float>(right_c, 0.0f, 1.0f, 254, 0);
+    uint16_t value = (left_r << 8) | right_r;
     return this->write_register(SCI_VOL, value) && this->wait_for_ready();
   }
   return false;
-}
-
-Volume VS10XXHAL::get_volume() const {
-  uint16_t value = this->read_register(SCI_VOL);
-  uint8_t left_ = (uint8_t)((value & 0xFF00) >> 8);
-  uint8_t right_ = (uint8_t)(value & 0x00FF);
-  uint8_t left = (int8_t)(30.0f - left_ * 30.0f/254.0f);
-  uint8_t right = (int8_t)(30.0f - right_ * 30.0f/254.0f);
-  return Volume {
-    left: left,
-    right: right
-  };
 }
 
 bool VS10XXHAL::turn_off_output() {

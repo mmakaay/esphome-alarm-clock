@@ -7,11 +7,6 @@
 namespace esphome {
 namespace vs10xx {
 
-struct Volume {
-  uint8_t left;
-  uint8_t right;
-};
-
 // To communicate using both 200KHz and 4MHz SPI frequencies, two SPIDevice
 // instances are used.
 //
@@ -94,10 +89,7 @@ class VS10XXHAL : public Component {
   /// Set the output volume of the left and right channel of the analog output.
   /// The volume goes from 0 (silent) to 30 (full volume). Out of bound values
   /// will be automatically clamped within these bounds.
-  bool set_volume(Volume volume);
-
-  /// Retrieve the output volume of the left and right channel of the analog output.
-  Volume get_volume() const;
+  bool set_volume(float left, float right);
 
   // High level SPI interaction methods.
   bool write_register(uint8_t reg, uint16_t value);

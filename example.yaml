@@ -704,12 +704,12 @@ binary_sensor:
             value: "false"
         - vs10xx.set_volume:
             id: audio_decoder
-            left: 32
-            right: 20
-        - vs10xx.set_volume: 50
+            left: 32%
+            right: 20%
+        - vs10xx.set_volume: 50%
         - vs10xx.set_volume: 0
         - vs10xx.set_volume:
-            volume: 15
+            volume: 15%
         - vs10xx.play: 
             blob_id: mp3_nr1
         - vs10xx.set_volume: 0

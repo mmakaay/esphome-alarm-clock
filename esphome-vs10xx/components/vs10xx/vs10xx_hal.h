@@ -63,7 +63,7 @@ class VS10XXHAL : public Component {
   /// command, default 0ms), without the device becoming ready, then false is
   /// returned and the device is registered as failed.
   /// Otherwise, true is returned.
-  bool wait_for_ready(uint16_t process_time_ms=0, uint16_t timeout_ms=500);
+  bool wait_for_ready(uint16_t process_time_ms=0, uint16_t timeout_ms=250);
 
   /// Check if a reset pin has been defined.
   bool has_reset() const;
@@ -90,6 +90,10 @@ class VS10XXHAL : public Component {
   /// The volume goes from 0 (silent) to 30 (full volume). Out of bound values
   /// will be automatically clamped within these bounds.
   bool set_volume(float left, float right);
+
+  /// Clear the decode time register, which tells us for how long the
+  /// chip has been decoding audio.
+  bool reset_decode_time();
 
   // High level SPI interaction methods.
   bool write_register(uint8_t reg, uint16_t value);

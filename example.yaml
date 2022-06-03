@@ -702,22 +702,10 @@ binary_sensor:
         - globals.set:
             id: rotated_during_press
             value: "false"
-        - vs10xx.set_volume:
-            id: audio_decoder
-            left: 32%
-            right: 20%
-        - vs10xx.set_volume: 50%
-        - vs10xx.set_volume: 0
-        - vs10xx.set_volume:
-            volume: 15%
+        #- vs10xx.turn_off_output:
+        - vs10xx.set_volume: 90%
         - vs10xx.play: 
             blob_id: mp3_nr1
-        - vs10xx.set_volume: 0%
-        - vs10xx.turn_off_output:
-        - vs10xx.set_volume:
-            id: audio_decoder
-            left: 32%
-            right: 20%
     on_release:
       then: 
         if:

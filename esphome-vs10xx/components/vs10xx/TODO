@@ -1,3 +1,5 @@
+Make hal protected, to keep all functionality encapsulated.
+
 SM_DIFF left channel inverted option
 
 SM_PDOWN power down option

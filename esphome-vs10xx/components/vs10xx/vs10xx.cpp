@@ -66,6 +66,9 @@ void VS10XX::loop() {
   }
 
   switch (this->device_state_) {
+    case DEVICE_READY:
+      this->handle_media_operations_();
+      break;
     case DEVICE_RESET:
       if (this->hal->reset()) {
         this->set_device_state_(DEVICE_INIT_PHASE_1);
@@ -94,6 +97,8 @@ void VS10XX::loop() {
       ESP_LOGD(TAG, "Turning on analog audio at 44.1kHz stereo");
       this->hal->write_register(SCI_AUDATA, 44101);
 
+      this->sync_preferences_to_device_();
+
       // All is okay, the device can be used.
       this->set_device_state_(DEVICE_READY); 
       ESP_LOGI(TAG, "Device initialized successfully");
@@ -102,9 +107,6 @@ void VS10XX::loop() {
       ESP_LOGE(TAG, "Device failed");
       this->set_device_state_(DEVICE_FAILED);
       break;
-    case DEVICE_READY:
-      this->handle_media_operations_();
-      break;
     case DEVICE_FAILED:
       // NOOP
       break;
@@ -112,15 +114,45 @@ void VS10XX::loop() {
 }
 
 void VS10XX::handle_media_operations_() {
+  auto start = millis();
   switch (this->media_state_) {
     case MEDIA_STOPPED:
       // NOOP
       break;
     case MEDIA_STARTING:
-      // XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+      this->audio_->reset();
+      // TODO drop use of this fully?
+      //this->high_freq_.start();
+      this->hal->reset_decode_time();
+      this->media_state_ = MEDIA_PLAYING;
       break;
-    default:
-      // NOOP
+    case MEDIA_PLAYING:
+      while ((millis() - start) < 100) {
+        if (this->hal->wait_for_ready(50, 0)) {
+          if (this->audio_->next_chunk(VS10XX_CHUNK_SIZE)) {
+            if (this->audio_->chunk_size > 0) {
+              this->hal->begin_data_transaction();
+              for (size_t i = 0; i < this->audio_->chunk_size; i++) {
+                  this->hal->write_byte(*(this->audio_->chunk_start + i));
+              }
+              this->hal->end_transaction();
+            }
+          } else {
+            // Out of audio
+            ESP_LOGD(TAG, "Reached end of media input");
+            this->media_state_ = MEDIA_STOPPING;
+            return;
+          }
+        }
+      }
+      break;
+    case MEDIA_SWITCHING:
+      //this->high_freq_.stop();
+      this->media_state_ = MEDIA_STOPPED;
+      break;
+    case MEDIA_STOPPING:
+      //this->high_freq_.stop();
+      this->media_state_ = MEDIA_STOPPED;
       break;
   }
 }
@@ -135,6 +167,18 @@ void VS10XX::set_media_state_(MediaState state) {
   ESP_LOGD(TAG, "Media state: [%d] %s", state, media_state_to_text(state));
 }
 
+void VS10XX::set_volume(float left, float right, bool publish) {
+  auto left_ = clamp(left, 0.0f, 1.0f);
+  auto right_ = clamp(right, 0.0f, 1.0f);
+  ESP_LOGD(TAG, "Set output volume: left=%0.2f, right=%0.2f", left_, right_);
+
+  if (this->hal->set_volume(left_, right_) && publish) {
+    this->preferences_.volume_left = left_;
+    this->preferences_.volume_right = right_;
+    this->store_preferences_();
+  }
+}
+
 void VS10XX::play(blob::Blob *blob) {
   if (this->device_state_ != DEVICE_READY) {
     ESP_LOGE(TAG, "play(): Device not ready (current state: %s)", device_state_to_text(this->device_state_));
@@ -142,7 +186,7 @@ void VS10XX::play(blob::Blob *blob) {
     ESP_LOGD(TAG, "play(): starting playback");
     this->set_media_state_(MEDIA_STARTING);
     this->audio_ = blob;
- } else if (this->media_state_ == MEDIA_PLAYING) {
+  } else if (this->media_state_ == MEDIA_PLAYING) {
     ESP_LOGD(TAG, "play(): Already playing, first stopping active playback");
     this->set_media_state_(MEDIA_SWITCHING);
     this->next_audio_ = blob;
@@ -152,6 +196,7 @@ void VS10XX::play(blob::Blob *blob) {
 }
 
 void VS10XX::stop() {
+  // XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
   //if (this->device_state_ == DEVICE_READY) {
   //  ESP_LOGD(TAG, "stop(): The device was not playing, OK");
   //  return;
@@ -180,6 +225,13 @@ void VS10XX::restore_preferences_() {
   ESP_LOGD(TAG, "  - Volume left  : %0.2f", this->preferences_.volume_left);
   ESP_LOGD(TAG, "  - Volume right : %0.2f", this->preferences_.volume_right);
   ESP_LOGD(TAG, "  - Muted        : %s", YESNO(this->preferences_.muted));
+}
+
+void VS10XX::sync_preferences_to_device_() {
+  ESP_LOGD(TAG, "Synchronizing preferences to device");
+  auto left = this->preferences_.volume_left;
+  auto right = this->preferences_.volume_right;
+  this->hal->set_volume(left, right);
 }
 
 void VS10XX::set_default_preferences_() {

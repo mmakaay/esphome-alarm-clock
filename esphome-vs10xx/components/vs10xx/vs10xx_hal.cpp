@@ -38,7 +38,7 @@ bool VS10XXHAL::has_reset() const { return this->reset_pin_ != nullptr; }
 bool VS10XXHAL::reset() {
   // Sanity check: in case no reset pin has been defined, check if DREQ goes HIGH.
   if (!this->is_ready() && !this->has_reset()) {
-    if (!this->wait_for_ready(0, 1000)) {
+    if (!this->wait_for_ready()) {
       ESP_LOGE(TAG, "DREQ not pulled HIGH by the device and no reset pin defined");
       ESP_LOGE(TAG, "Did you forget to pull up the reset pin, to boot the device?");
       return false;
@@ -201,14 +201,11 @@ bool VS10XXHAL::test_communication() {
 }
 
 bool VS10XXHAL::set_volume(float left, float right) {
-  auto left_c = clamp(left, 0.0f, 1.0f);
-  auto right_c = clamp(right, 0.0f, 1.0f);
-  ESP_LOGD(TAG, "Set output volume: left=%0.2f, right=%0.2f", left_c, right_c);
   if (this->wait_for_ready()) {
     // Translate 0 - 1 scale into 254 - 0 scale as used by the device.
-    uint16_t left_r = remap<uint16_t, float>(left_c, 0.0f, 1.0f, 254, 0);
-    uint16_t right_r = remap<uint16_t, float>(right_c, 0.0f, 1.0f, 254, 0);
-    uint16_t value = (left_r << 8) | right_r;
+    uint16_t left_ = remap<uint16_t, float>(left, 0.0f, 1.0f, 254, 0);
+    uint16_t right_ = remap<uint16_t, float>(right, 0.0f, 1.0f, 254, 0);
+    uint16_t value = (left_ << 8) | right_;
     return this->write_register(SCI_VOL, value) && this->wait_for_ready();
   }
   return false;
@@ -217,6 +214,11 @@ bool VS10XXHAL::set_volume(float left, float right) {
 bool VS10XXHAL::turn_off_output() {
   ESP_LOGD(TAG, "Turn off analog output");
   return this->write_register(SCI_VOL, 0xFFFF) && this->wait_for_ready();
+}
+
+bool VS10XXHAL::reset_decode_time() {
+  ESP_LOGD(TAG, "Reset decode time");
+  return this->write_register(SCI_DECODE_TIME, 0) && this->wait_for_ready();
 }
 
 bool VS10XXHAL::fail_() {

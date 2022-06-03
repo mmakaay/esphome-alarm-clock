@@ -19,9 +19,15 @@ class Blob {
   /// The size of the data (in bytes) that are stored in the Blob object.
   const size_t size;
 
+  /// A pointer to the start of the data of the current chunk.
+  const uint8_t* chunk_start{nullptr};
+
+  /// The size of the current chunk.
+  size_t chunk_size{0};
+
   void reset();
 
-  bool next_chunk(size_t max_chunk_size, uint8_t** chunk_data, size_t *chunk_size); 
+  bool next_chunk(size_t max_chunk_size);
 
  protected:
   size_t pos_{0}; 

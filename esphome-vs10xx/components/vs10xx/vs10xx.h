@@ -59,6 +59,10 @@ class VS10XX : public EntityBase, public Component {
   void dump_config() override;
   void loop() override;
 
+  /// Set the output volume.
+  /// The volume value must be between 0.0 (silent) and 1.0 (loud).
+  void set_volume(float left, float right, bool publish = true);
+
   /// Play some audio.
   void play(blob::Blob *blob);
 
@@ -74,6 +78,7 @@ class VS10XX : public EntityBase, public Component {
   void store_preferences_();
   void restore_preferences_();
   void set_default_preferences_();
+  void sync_preferences_to_device_();
 
   /// Plugins to load for this device.
   std::vector<VS10XXPlugin*> plugins_{};
@@ -95,6 +100,14 @@ class VS10XX : public EntityBase, public Component {
   /// This is used in case play() is called while another
   /// audio file is being played.
   blob::Blob *next_audio_{nullptr};
+
+  /// A buffer to store data that must be sent to the device.
+  uint8_t buffer_[VS10XX_CHUNK_SIZE]{};
+
+  /// The number of bytes in the buffer that must be sent to the device.
+  size_t buffer_size_{0};
+
+  HighFrequencyLoopRequester high_freq_;
 };
 
 }  // namespace vs10xx

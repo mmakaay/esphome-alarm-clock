@@ -4,7 +4,7 @@ from esphome import automation
 from esphome import pins
 from esphome.components import spi
 from esphome.components import blob
-from esphome.const import CONF_ID, CONF_RESET_PIN, CONF_TYPE
+from esphome.const import CONF_ID, CONF_RESET_PIN, CONF_TYPE, CONF_DELTA, CONF_DIRECTION
 
 CONF_HAL_ID = "hal_id"
 CONF_SPI_FAST_ID = "spi_fast_id"
@@ -34,6 +34,9 @@ VS1053Chipset = vs10xx_ns.class_("VS1053Chipset", VS10XXHALChipset)
 VS10XXPlugin = vs10xx_ns.class_("VS10XXPlugin")
 
 # Actions
+ChangeVolumeAction = vs10xx_ns.class_(
+    "ChangeVolumeAction", automation.Action, cg.Parented.template(VS10XX)
+)
 SetVolumeAction = vs10xx_ns.class_(
     "SetVolumeAction", automation.Action, cg.Parented.template(VS10XX)
 )
@@ -155,6 +158,37 @@ async def vs10xx_play_to_code(config, action_id, template_arg, args):
     await cg.register_parented(var, config[CONF_ID])
     blob_var = await cg.get_variable(config[CONF_BLOB_ID])
     cg.add(var.set_blob(blob_var))
+    return var
+
+
+@automation.register_action(
+    "vs10xx.volume_up",
+    ChangeVolumeAction,
+    cv.maybe_simple_value(
+        {
+            cv.GenerateID(): cv.use_id(VS10XX),
+            cv.Optional(CONF_DELTA, default=0.1): cv.percentage,
+            cv.Optional(CONF_DIRECTION, default=+1): +1,
+        },
+        key=CONF_DELTA,
+    ),
+)
+@automation.register_action(
+    "vs10xx.volume_down",
+    ChangeVolumeAction,
+    cv.maybe_simple_value(
+        {
+            cv.GenerateID(): cv.use_id(VS10XX),
+            cv.Optional(CONF_DELTA, default=0.1): cv.percentage,
+            cv.Optional(CONF_DIRECTION, default=-1): -1
+        },
+        key=CONF_DELTA,
+    ),
+)
+async def vs10xx_volume_up_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_ID])
+    cg.add(var.set_delta(config[CONF_DIRECTION] * config[CONF_DELTA]))
     return var
 
 

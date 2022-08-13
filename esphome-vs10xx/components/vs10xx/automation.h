@@ -30,6 +30,16 @@ template<typename... Ts> class SetVolumeAction : public Action<Ts...>, public Pa
   }
 };
 
+template<typename... Ts> class ChangeVolumeAction : public Action<Ts...>, public Parented<VS10XX> {
+ public:
+  TEMPLATABLE_VALUE(float, delta)
+
+  void play(Ts... x) override {
+    auto delta = this->delta_.value(x...);
+    this->parent_->change_volume(delta);
+  }
+};
+
 template<typename... Ts> class PlayAction : public Action<Ts...>, public Parented<VS10XX> {
  public:
   TEMPLATABLE_VALUE(blob::Blob*, blob)

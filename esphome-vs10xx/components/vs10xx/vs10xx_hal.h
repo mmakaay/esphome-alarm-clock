@@ -18,6 +18,20 @@ namespace vs10xx {
 class VS10XXSlowSPI : public spi::SPIDevice<SPI_BASE, spi::DATA_RATE_200KHZ> {};
 class VS10XXFastSPI : public spi::SPIDevice<SPI_BASE, spi::DATA_RATE_4MHZ> {};
 
+/// This class holds status information for the device.
+class VS10XXStatus {
+ public:
+  bool playing;
+  AudioFormat format;
+
+  explicit VS10XXStatus() { this->clear(); }
+
+  void clear() {
+    this->playing = false;
+    this->format = FORMAT_UNKNOWN;
+  }
+};
+
 /// This class describes the interface that must be implemented for
 /// a HAL chipset. This interface contains all chipset-specific HAL code.
 class VS10XXHALChipset {
@@ -51,19 +65,16 @@ class VS10XXHAL : public Component {
   bool go_slow();
   bool go_fast();
 
-  /// Check if a failure has been encountered.
-  bool has_failed() const;
-
   /// Check if the device is ready for action.
   bool is_ready() const;
 
   /// Check if the device is ready for action within a given timeout.
-  /// When the timeout (default 500ms) is reached after an initial process time
-  /// delay (estimated time that the device will take to process the last
-  /// command, default 0ms), without the device becoming ready, then false is
-  /// returned and the device is registered as failed.
-  /// Otherwise, true is returned.
-  bool wait_for_ready(uint16_t process_time_ms=0, uint16_t timeout_ms=250);
+  /// When the timeout is reached, without the device becoming ready, then
+  /// false is returned. Otherwise, true is returned.
+  ///
+  /// The default timeout is based on the worst case scenario from the
+  /// VS1053 data sheet: 22000 XTALI / 12.288Mhz = 1.8ms.
+  bool wait_for_ready(uint16_t timeout_ms=2);
 
   /// Check if a reset pin has been defined.
   bool has_reset() const;
@@ -83,10 +94,15 @@ class VS10XXHAL : public Component {
   /// Perform some communication tests to see if we can talk to the device.
   bool test_communication();
 
-  /// Turn off the analog output.
+  /// Turn off the output.
   bool turn_off_output();
 
-  /// Set the output volume of the left and right channel of the analog output.
+  /// Turn on audio output circuitry at 44.1kHz stereo.
+  /// For now, I have not included options to set a different frequency,
+  /// since this seems like a sane default to me.
+  bool turn_on_output(); 
+
+  /// Set the output volume of the left and right channel of the output.
   /// The volume goes from 0 (silent) to 30 (full volume). Out of bound values
   /// will be automatically clamped within these bounds.
   bool set_volume(float left, float right);
@@ -94,6 +110,9 @@ class VS10XXHAL : public Component {
   /// Clear the decode time register, which tells us for how long the
   /// chip has been decoding audio.
   bool reset_decode_time();
+
+  /// Retrieve the device status.
+  VS10XXStatus& get_status();
 
   // High level SPI interaction methods.
   bool write_register(uint8_t reg, uint16_t value);
@@ -135,11 +154,7 @@ class VS10XXHAL : public Component {
   /// Turning it off through the reset pin, offers the best power saving.
   GPIOPin *reset_pin_{nullptr};
 
-  /// Whether or not a device error has been encountered.
-  bool has_failed_{false};
-
-  /// A little utility method that flags the device as failed and returns false.
-  bool fail_();
+  VS10XXStatus status_{};
 };
 
 }  // namespace vs10xx

@@ -16,8 +16,11 @@ namespace vs10xx {
 /// States used by the VS10XX code to implement its state machine. 
 enum DeviceState {
   DEVICE_RESET,
-  DEVICE_INIT_PHASE_1,
-  DEVICE_INIT_PHASE_2,
+  DEVICE_VERIFY_CHIPSET,
+  DEVICE_SOFT_RESET,
+  DEVICE_TO_FAST_SPI,
+  DEVICE_LOAD_PLUGINS,
+  DEVICE_INIT_AUDIO,
   DEVICE_REPORT_FAILED,
   DEVICE_FAILED,
   DEVICE_READY,
@@ -31,17 +34,28 @@ enum MediaState {
   MEDIA_STARTING,
   MEDIA_PLAYING,
   MEDIA_STOPPING,
-  MEDIA_SWITCHING,
 };
 
 /// Translates a MediaState into a human readable text.
 const char* media_state_to_text(MediaState state);
 
+/// This struct holds the preferences for the device. These data are stored in
+/// flash memory, so they can be restored after a device restart.
 struct VS10XXPreferences {
   float volume_left{1.0f};
   float volume_right{1.0f};
   bool muted{false};
 } __attribute__((packed));
+
+/// Bitmask values that are used to keep track of what preferences need to be
+/// sent to the device.
+enum PreferencesChangeBits {
+  CHANGE_NONE = 0x00,
+  CHANGE_VOLUME = 0x01,
+  CHANGE_MUTE = 0x02,         // TODO, example values for now
+  CHANGE_EQUALIZER = 0x04,    // TODO, example values for now
+  CHANGE_ALL = CHANGE_VOLUME  // TODO, update when mute and eq are added
+};
 
 class VS10XX : public EntityBase, public Component {
  public:
@@ -63,22 +77,31 @@ class VS10XX : public EntityBase, public Component {
   /// The volume value must be between 0.0 (silent) and 1.0 (loud).
   void set_volume(float left, float right, bool publish = true);
 
+  /// Change the output volume with a provided delta amount (-1.0 - 1.0).
+  void change_volume(float delta);
+
   /// Play some audio.
   void play(blob::Blob *blob);
 
   /// Stop playing audio.
   void stop();
 
-  uint32_t hash_base() override;
+//  uint32_t hash_base() override;
 
  protected:
-  // Preferences are stored in flash memory.
+  // Members that handle device preferences. Setting preferences (e.g. the
+  // volume) is handled asynchronously. When settings are updated, then it's
+  // registered what settings have changed. Subsequently, the loop code will
+  // try to sync the changed settings to the device.
+  // The reason or the async behavior, is that it is never sure if the device
+  // is ready to receive a command at any given time.
   ESPPreferenceObject preferences_store_;
   VS10XXPreferences preferences_{};
   void store_preferences_();
   void restore_preferences_();
   void set_default_preferences_();
   void sync_preferences_to_device_();
+  uint8_t changed_preferences_{CHANGE_NONE};
 
   /// Plugins to load for this device.
   std::vector<VS10XXPlugin*> plugins_{};

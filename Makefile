@@ -16,3 +16,6 @@ copy:
 
 clean:
 	esphome clean example.yaml
+
+audio-test:
+	esphome compile audio-test.yaml && esphome upload audio-test.yaml

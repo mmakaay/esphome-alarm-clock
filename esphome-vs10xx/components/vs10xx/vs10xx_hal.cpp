@@ -54,15 +54,12 @@ bool VS10XXHAL::reset() {
     this->reset_pin_->digital_write(true);
 
     // After initialization, the DREQ pin ought to be pulled HIGH.
-    // The datasheet specifies max 50000 XTALI cycles for boot initialization.
+    // The datasheets specifies max 50000 XTALI cycles for boot initialization.
     // At the default XTALI of 12.288 MHz, this takes about 4ms.
-    // Therefore, 5ms ought to be enough for the device to become ready.
-    if (!this->wait_for_ready(5)) {
+    // Therefore, 10ms ought to be way enough for the device to become ready.
+    if (!this->wait_for_ready(10)) {
       return false;
     }
-
-    // Clear the fail state, since a hardware reset might have fixed an issue.
-    this->has_failed_ = false;
   } else {
     ESP_LOGW(TAG, "Not performing hard reset, no reset pin defined"); 
   }
@@ -91,9 +88,7 @@ bool VS10XXHAL::soft_reset() {
   // requires "SHARED MODE", then we can implement a config option for it.
   this->write_register(SCI_MODE, SM_SDINEW | SM_RESET);
 
-  // According to the specs, 2ms ought to be enough for the device to become
-  // ready after the soft reset.
-  if (!this->wait_for_ready(2)) {
+  if (!this->wait_for_ready()) {
     return false;
   }
 
@@ -101,7 +96,7 @@ bool VS10XXHAL::soft_reset() {
   auto mode = this->read_register(SCI_MODE);
   if (mode != SM_SDINEW) {
     ESP_LOGE(TAG, "SCI_MODE not SM_SDINEW after soft reset (value is %d)", mode);
-    return this->fail_();
+    return false;
   }
 
   return true;
@@ -144,7 +139,7 @@ bool VS10XXHAL::verify_chipset() {
   if (version != supported_version) {
     ESP_LOGE(TAG, "Unsupported chipset version: %d (expected %d)",
              version, supported_version);
-    return this->fail_();
+    return false;
   }
   ESP_LOGD(TAG, "Chipset version: %d, verified OK", version);
   return true;
@@ -157,12 +152,11 @@ bool VS10XXHAL::test_communication() {
   }
 
   // Now test if we can write and read data over the
-  // bus without errors. In fast SPI mode, we can perform more
-  // write operations in the same time.
-  auto step_size = this->fast_mode_ ? 30 : 300;
+  // bus without errors.
+  auto step_size = 0x1010;
   auto cycles = 0;
   auto failures = 0;
-  for (int value = 0; value < 0xFFFF; value += step_size) {
+  for (int value = 0x0000; value < 0xFFFF; value += step_size) {
     cycles++;
     this->write_register(SCI_VOL, value);
 
@@ -171,11 +165,9 @@ bool VS10XXHAL::test_communication() {
     if (cycles == 1) {
       if (this->is_ready()) {
         ESP_LOGE(TAG, "DREQ is unexpectedly HIGH after sending command");
-        return this->fail_();
+        return false;
       }
-      // Worst case, setting the volume could take 2100 clock cycles.
-      // At 12.288Mhz, this is 171ms. After that, DREQ should be HIGH again.
-      if (!this->wait_for_ready(200, 0)) {
+      if (!this->wait_for_ready()) {
         ESP_LOGE(TAG, "DREQ is unexpectedly LOW after processing command");
         return false;
       }
@@ -197,7 +189,7 @@ bool VS10XXHAL::test_communication() {
     ESP_LOGD(TAG, "SPI communication successful during %d write/read cycles", cycles);
     return true;
   }
-  return this->fail_();
+  return false;
 }
 
 bool VS10XXHAL::set_volume(float left, float right) {
@@ -205,62 +197,97 @@ bool VS10XXHAL::set_volume(float left, float right) {
     // Translate 0 - 1 scale into 254 - 0 scale as used by the device.
     uint16_t left_ = remap<uint16_t, float>(left, 0.0f, 1.0f, 254, 0);
     uint16_t right_ = remap<uint16_t, float>(right, 0.0f, 1.0f, 254, 0);
-    uint16_t value = (left_ << 8) | right_;
-    return this->write_register(SCI_VOL, value) && this->wait_for_ready();
+    uint16_t value = (left_ * SV_LEFT) | (right_ * SV_RIGHT);
+    this->write_register(SCI_VOL, value);
+    return this->wait_for_ready();
   }
   return false;
 }
 
 bool VS10XXHAL::turn_off_output() {
-  ESP_LOGD(TAG, "Turn off analog output");
-  return this->write_register(SCI_VOL, 0xFFFF) && this->wait_for_ready();
-}
-
-bool VS10XXHAL::reset_decode_time() {
-  ESP_LOGD(TAG, "Reset decode time");
-  return this->write_register(SCI_DECODE_TIME, 0) && this->wait_for_ready();
-}
-
-bool VS10XXHAL::fail_() {
-  this->has_failed_ = true;
+  if (this->wait_for_ready()) {
+    ESP_LOGD(TAG, "Turning off output");
+    this->write_register(SCI_VOL, 0xFFFF);
+    return this->wait_for_ready();
+  }
   return false;
 }
 
-bool VS10XXHAL::has_failed() const {
-  return this->has_failed_;
+bool VS10XXHAL::turn_on_output() {
+  if (this->wait_for_ready()) {
+    ESP_LOGD(TAG, "Turning on audio output at 44.1kHz stereo");
+    this->write_register(SCI_AUDATA, 44101);
+    return this->wait_for_ready();
+  }
+  return false;
+}
+
+bool VS10XXHAL::reset_decode_time() {
+  if (this->wait_for_ready()) {
+    ESP_LOGD(TAG, "Resetting decode time");
+    this->write_register(SCI_DECODE_TIME, 0);
+    return this->wait_for_ready();
+  }
+  return false;
 }
 
 bool VS10XXHAL::is_ready() const {
   return this->dreq_pin_->digital_read() == true;
 }
 
-bool VS10XXHAL::wait_for_ready(uint16_t process_time_ms, uint16_t timeout_ms) {
-  if (process_time_ms > 0) {
-    delay(process_time_ms);
-  }
+bool VS10XXHAL::wait_for_ready(uint16_t timeout_ms) {
   auto timeout_at = millis() + timeout_ms;
   while (!this->is_ready()) {
     if (millis() > timeout_at) {
-      ESP_LOGE(TAG, "DREQ not HIGH within %dms timeout", timeout_ms);
-      return this->fail_();
+      //ESP_LOGE(TAG, "DREQ not HIGH within %dms timeout", timeout_ms);
+      return false;
     }
     delay(1);
   }
   return true;
 }
 
-bool VS10XXHAL::write_register(uint8_t reg, uint16_t value) {
-  if (this->wait_for_ready()) {
-    this->begin_command_transaction();
-    this->write_byte(2); // command: write
-    this->write_byte(reg);
-    this->write_byte16(value);
-    this->end_transaction();
-    ESP_LOGVV(TAG, "write_register: 0x%02X: 0x%02X", reg, value);
-    return true;
+VS10XXStatus &VS10XXHAL::get_status() {
+  auto hdat0 = this->read_register(SCI_HDAT0);
+  auto hdat1 = this->read_register(SCI_HDAT1);
+
+  if (hdat0 == 0 && hdat1 == 0) {
+    this->status_.clear();
   } else {
-    return false;
+    this->status_.playing = true;
+
+    if (hdat1 ==  0x7665) {
+        this->status_.format = FORMAT_WAV;
+    } else if (hdat1 == 0x4154) {
+        this->status_.format = FORMAT_AAC_ADTS;
+    } else if (hdat1 == 0x4144) {
+        this->status_.format = FORMAT_AAC_ADIF;
+    } else if (hdat1 == 0x4D34) {
+        this->status_.format = FORMAT_AAC_MP4;
+    } else if (hdat1 == 0x574D) {
+        this->status_.format = FORMAT_WMA;
+    } else if (hdat1 == 0x4D54) {
+        this->status_.format = FORMAT_MIDI;
+    } else if (hdat1 == 0x4f67) {
+        this->status_.format = FORMAT_OGG;
+    } else if (hdat1 >= 0xffe0 && hdat1 <= 0xffff) {
+        this->status_.format = FORMAT_MP3;
+    } else {
+        this->status_.format = FORMAT_UNKNOWN;
+    }
   }
+
+  return this->status_;
+}
+
+bool VS10XXHAL::write_register(uint8_t reg, uint16_t value) {
+  this->begin_command_transaction();
+  this->write_byte(2); // command: write
+  this->write_byte(reg);
+  this->write_byte16(value);
+  this->end_transaction();
+  ESP_LOGVV(TAG, "write_register: 0x%02X: 0x%02X", reg, value);
+  return true;
 }
 
 uint16_t VS10XXHAL::read_register(uint8_t reg) const {

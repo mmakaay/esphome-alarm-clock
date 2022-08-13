@@ -10,10 +10,16 @@ const char* device_state_to_text(DeviceState state) {
   switch (state) {
     case DEVICE_RESET:
       return "Performing hard reset";
-    case DEVICE_INIT_PHASE_1:
-      return "Initializing, phase 1";
-    case DEVICE_INIT_PHASE_2:
-      return "Initializing, phase 2";
+    case DEVICE_VERIFY_CHIPSET:
+      return "Checking chipset";
+    case DEVICE_SOFT_RESET:
+      return "Soft resetting";
+    case DEVICE_TO_FAST_SPI:
+      return "Setting SPI to fast mode";
+    case DEVICE_LOAD_PLUGINS:
+      return "Loading plugins";
+    case DEVICE_INIT_AUDIO:
+      return "Initializing audio";
     case DEVICE_REPORT_FAILED:
       return "Reporting a device failure";
     case DEVICE_FAILED:
@@ -33,8 +39,6 @@ const char* media_state_to_text(MediaState state) {
       return "Starting playback";
     case MEDIA_PLAYING:
       return "Playing audio file";
-    case MEDIA_SWITCHING:
-      return "Switching to new audio file";
     case MEDIA_STOPPING:
       return "Stopping playback";
     default:
@@ -56,50 +60,54 @@ void VS10XX::dump_config() {
 void VS10XX::setup() {
   ESP_LOGCONFIG(TAG, "Setting up device");
   this->preferences_store_ = global_preferences->make_preference<VS10XXPreferences>(this->get_object_id_hash());
-  this->restore_preferences_();
 }
 
 void VS10XX::loop() {
-  // When the HAL has ran into an issue, then go into failure mode.
-  if (this->device_state_ != DEVICE_FAILED && this->hal->has_failed()) {
-    this->set_device_state_(DEVICE_REPORT_FAILED); 
-  }
-
   switch (this->device_state_) {
     case DEVICE_READY:
       this->handle_media_operations_();
       break;
     case DEVICE_RESET:
       if (this->hal->reset()) {
-        this->set_device_state_(DEVICE_INIT_PHASE_1);
+        this->set_device_state_(DEVICE_VERIFY_CHIPSET);
+      } else {
+        this->set_device_state_(DEVICE_REPORT_FAILED);
       }
       break;
-    case DEVICE_INIT_PHASE_1:
+    case DEVICE_VERIFY_CHIPSET:
       if (this->hal->go_slow() &&
           this->hal->test_communication() &&
-          this->hal->verify_chipset() &&
-          this->hal->soft_reset()) {
-        this->set_device_state_(DEVICE_INIT_PHASE_2);
+          this->hal->verify_chipset()) {
+        this->set_device_state_(DEVICE_SOFT_RESET);
+      } else {
+        this->set_device_state_(DEVICE_REPORT_FAILED);
       }
       break;
-    case DEVICE_INIT_PHASE_2:
-      if (!this->hal->go_fast() || !this->hal->test_communication()) {
-        return;
+    case DEVICE_SOFT_RESET:
+      if (this->hal->go_slow() && this->hal->soft_reset()) {
+        this->set_device_state_(DEVICE_TO_FAST_SPI);
+      } else {
+        this->set_device_state_(DEVICE_REPORT_FAILED);
       }
+    case DEVICE_TO_FAST_SPI:
+      if (this->hal->go_fast() && this->hal->test_communication()) {
+        this->set_device_state_(DEVICE_LOAD_PLUGINS);
+      } else {
+        this->set_device_state_(DEVICE_REPORT_FAILED);
+      }
+    case DEVICE_LOAD_PLUGINS:
       for (auto *plugin : this->plugins_) {
-        ESP_LOGD(TAG, "Load plugin: %s", plugin->description());
+        ESP_LOGD(TAG, "Loading plugin: %s", plugin->description());
         if (!plugin->load(this->hal)) {
+          this->set_device_state_(DEVICE_REPORT_FAILED);
           return;
         }
       }
-
-      this->hal->turn_off_output();
-      ESP_LOGD(TAG, "Turning on analog audio at 44.1kHz stereo");
-      this->hal->write_register(SCI_AUDATA, 44101);
-
+      this->set_device_state_(DEVICE_INIT_AUDIO);
+    case DEVICE_INIT_AUDIO:
+      this->hal->turn_on_output();
+      this->restore_preferences_();
       this->sync_preferences_to_device_();
-
-      // All is okay, the device can be used.
       this->set_device_state_(DEVICE_READY); 
       ESP_LOGI(TAG, "Device initialized successfully");
       break;
@@ -114,26 +122,40 @@ void VS10XX::loop() {
 }
 
 void VS10XX::handle_media_operations_() {
+  // First, try to send async preference changes to the device.
+  // If this does not work, we'll try again the next time.
+  this->sync_preferences_to_device_();
+
+  // Secondly, handle playing media.
   auto start = millis();
+  size_t sent = 0;
   switch (this->media_state_) {
     case MEDIA_STOPPED:
-      // NOOP
+      if (this->next_audio_ != nullptr) {
+        this->audio_ = this->next_audio_;
+        this->next_audio_ = nullptr;
+        this->media_state_ = MEDIA_STARTING;
+      }
       break;
     case MEDIA_STARTING:
       this->audio_->reset();
-      // TODO drop use of this fully?
-      //this->high_freq_.start();
+      this->high_freq_.start();
       this->hal->reset_decode_time();
       this->media_state_ = MEDIA_PLAYING;
       break;
     case MEDIA_PLAYING:
-      while ((millis() - start) < 100) {
-        if (this->hal->wait_for_ready(50, 0)) {
+      // Send chunks of data to the device. Limit the time during which
+      // this is done, to not block the main loop for too long.
+      // Also, when a change in the settings is detected, then stop feeding
+      // audio, to allow the change to be propagated to the device.
+      while ((millis() - start) < 30 && this->changed_preferences_ == CHANGE_NONE) {
+        if (this->hal->is_ready()) {
           if (this->audio_->next_chunk(VS10XX_CHUNK_SIZE)) {
             if (this->audio_->chunk_size > 0) {
               this->hal->begin_data_transaction();
               for (size_t i = 0; i < this->audio_->chunk_size; i++) {
                   this->hal->write_byte(*(this->audio_->chunk_start + i));
+                  sent++;
               }
               this->hal->end_transaction();
             }
@@ -146,12 +168,9 @@ void VS10XX::handle_media_operations_() {
         }
       }
       break;
-    case MEDIA_SWITCHING:
-      //this->high_freq_.stop();
-      this->media_state_ = MEDIA_STOPPED;
-      break;
     case MEDIA_STOPPING:
-      //this->high_freq_.stop();
+      this->high_freq_.stop();
+      this->device_state_ = DEVICE_SOFT_RESET;
       this->media_state_ = MEDIA_STOPPED;
       break;
   }
@@ -172,11 +191,18 @@ void VS10XX::set_volume(float left, float right, bool publish) {
   auto right_ = clamp(right, 0.0f, 1.0f);
   ESP_LOGD(TAG, "Set output volume: left=%0.2f, right=%0.2f", left_, right_);
 
-  if (this->hal->set_volume(left_, right_) && publish) {
-    this->preferences_.volume_left = left_;
-    this->preferences_.volume_right = right_;
-    this->store_preferences_();
-  }
+  this->preferences_.volume_left = left_;
+  this->preferences_.volume_right = right_;
+  this->changed_preferences_ |= CHANGE_VOLUME;
+
+  if (publish) { this->store_preferences_(); }
+}
+
+void VS10XX::change_volume(float delta) {
+  auto delta_ = clamp(delta, -1.0f, 1.0f);
+  ESP_LOGD(TAG, "Change output volume: delta=%0.2f", delta_);
+  this->set_volume(this->preferences_.volume_left + delta_,
+                   this->preferences_.volume_right + delta_, true);
 }
 
 void VS10XX::play(blob::Blob *blob) {
@@ -188,26 +214,24 @@ void VS10XX::play(blob::Blob *blob) {
     this->audio_ = blob;
   } else if (this->media_state_ == MEDIA_PLAYING) {
     ESP_LOGD(TAG, "play(): Already playing, first stopping active playback");
-    this->set_media_state_(MEDIA_SWITCHING);
     this->next_audio_ = blob;
+    this->set_media_state_(MEDIA_STOPPING);
   } else {
     ESP_LOGE(TAG, "play(): Current media state (%s) not supported play command", media_state_to_text(this->media_state_));
   }
 }
 
 void VS10XX::stop() {
-  // XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
-  //if (this->device_state_ == DEVICE_READY) {
-  //  ESP_LOGD(TAG, "stop(): The device was not playing, OK");
-  //  return;
-  //}
-  //if (this->device_state_ == DEVICE_READY) {
-  //}
-  //if (this->device_state_ != DEVICE_PLAYING) {
-  //  ESP_LOGE(TAG, "stop(): Cannot stop, the device is not playing audio");
-  //  return;
-  //}
-  //this->audio_ = nullptr;
+  if (this->device_state_ != DEVICE_READY) {
+    ESP_LOGE(TAG, "stop(): Device not ready (current state: %s)", device_state_to_text(this->device_state_));
+  } else if (this->media_state_ == MEDIA_STOPPED) {
+    ESP_LOGD(TAG, "stop(): Media already stopped, OK");
+  } else if (this->media_state_ == MEDIA_STOPPING) {
+    ESP_LOGD(TAG, "stop(): Media already stopping, OK");
+  } else {
+    ESP_LOGD(TAG, "stop(): Stopping media playback");
+    this->media_state_ = MEDIA_STOPPING;
+  }
 }
 
 void VS10XX::store_preferences_() {
@@ -222,16 +246,24 @@ void VS10XX::restore_preferences_() {
   } else {
     ESP_LOGD(TAG, "Preferences restored");
   }
+  this->changed_preferences_ = CHANGE_ALL;
+
   ESP_LOGD(TAG, "  - Volume left  : %0.2f", this->preferences_.volume_left);
   ESP_LOGD(TAG, "  - Volume right : %0.2f", this->preferences_.volume_right);
   ESP_LOGD(TAG, "  - Muted        : %s", YESNO(this->preferences_.muted));
 }
 
 void VS10XX::sync_preferences_to_device_() {
-  ESP_LOGD(TAG, "Synchronizing preferences to device");
-  auto left = this->preferences_.volume_left;
-  auto right = this->preferences_.volume_right;
-  this->hal->set_volume(left, right);
+  if (this->changed_preferences_ == CHANGE_NONE) {
+    return;
+  }
+  if (this->changed_preferences_ & CHANGE_VOLUME) {
+    auto left = this->preferences_.volume_left;
+    auto right = this->preferences_.volume_right;
+    if (this->hal->set_volume(left, right)) {
+      this->changed_preferences_ &= ~CHANGE_VOLUME;
+    }
+  }
 }
 
 void VS10XX::set_default_preferences_() {
@@ -240,7 +272,7 @@ void VS10XX::set_default_preferences_() {
   this->preferences_.muted = false;
 }
 
-uint32_t VS10XX::hash_base() { return 1527366430UL; }
+//uint32_t VS10XX::hash_base() { return 1527366430UL; }
 
 }  // namespace vs10xx
 }  // namespace esphome

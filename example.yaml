@@ -7,8 +7,18 @@ substitutions:
   friendly_name: "Alarm Clock"
 
 blob:
-  - id: mp3_nr1
-    file: "./audio/abracadabra.mp3"
+#  - id: mp3_nr1
+#    file: "./audio/abracadabra.mp3"
+#  - id: billy_jean
+#    file: "./audio/billy_jean-0.mid"
+  - id: miles
+    file: "./audio/I_can_see_for_miles.mid"
+#  - id: who_are_you
+#    file: "./audio/who_are_you.mid"
+  - id: bike_horn
+    file: "./audio/bike_horn.wav"
+  - id: arcade
+    file: "./audio/arcade.mp3"
 
 esphome:
   name: ${name}
@@ -703,27 +713,27 @@ binary_sensor:
             id: rotated_during_press
             value: "false"
         #- vs10xx.turn_off_output:
-        - vs10xx.set_volume: 90%
+        - vs10xx.set_volume: 70%
         - vs10xx.play: 
-            blob_id: mp3_nr1
-    on_release:
-      then: 
-        if:
-          condition:
-            or:
-              - script.is_running: do_alarm
-              - script.is_running: do_snooze
-          then:
-            - script.execute: turn_off_alarm
-          else:
-            if:
-              condition:
-                lambda: 'return !id(rotated_during_press);'
-              then:
-                - select.next: page
-                - script.execute: start_blink_loop
-                - script.execute: start_menu_timeout
-  
+            blob_id: bike_horn
+#    on_release:
+#      then: 
+#        if:
+#          condition:
+#            or:
+#              - script.is_running: do_alarm
+#              - script.is_running: do_snooze
+#          then:
+#            - script.execute: turn_off_alarm
+#          else:
+#            if:
+#              condition:
+#                lambda: 'return !id(rotated_during_press);'
+#              then:
+#                - select.next: page
+#                - script.execute: start_blink_loop
+#                - script.execute: start_menu_timeout
+#  
   # Proximity detection, used to switch an alarm into snooze mode
   # by hovering a hand over the alarm clock.
   - platform: analog_threshold
